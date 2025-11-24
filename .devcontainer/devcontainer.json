@@ -1,0 +1,34 @@
+{
+    "name": "joinly",
+    "build": {
+        "context": "..",
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": { },
+        "ghcr.io/devcontainers/features/node": {
+            "version": "lts"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "charliermarsh.ruff",
+                "ms-azuretools.vscode-docker",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "tamasfe.even-better-toml",
+                "yzhang.markdown-all-in-one"
+            ]
+        }
+    },
+    "containerEnv": {
+        "DISPLAY": "dummy",
+        "PYTHONUNBUFFERED": "True",
+        "UV_LINK_MODE": "copy",
+        "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
+    },
+    "postCreateCommand": "uv sync --frozen && uv run scripts/download_assets.py",
+    "postStartCommand": "uv run pre-commit install",
+    "remoteUser": "vscode"
+}

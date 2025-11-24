@@ -1,0 +1,13 @@
+.venv
+__pycache__
+.gitignore
+.git
+docker/
+docker-compose.yml
+.vscode
+.devcontainer
+.pre-commit-config.yaml
+.ruff_cache
+node_modules
+pytest_cache
+.env
