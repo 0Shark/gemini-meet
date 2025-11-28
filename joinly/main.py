@@ -1,14 +1,35 @@
 import asyncio
 import json
 import logging
+import warnings
+from pathlib import Path
 from typing import Any
 
 import click
 from dotenv import load_dotenv
 
-from joinly.server import mcp
-from joinly.settings import Settings, set_settings
-from joinly.utils.logging import configure_logging
+# Suppress pydantic-ai warnings about additionalProperties (Gemini compatibility)
+warnings.filterwarnings(
+    "ignore",
+    message=".*additionalProperties.*",
+    category=UserWarning,
+    module="pydantic_ai.*",
+)
+
+# Try to load .env file automatically if it exists (before Datadog initialization)
+# This ensures environment variables are available when Datadog initializes
+env_file = Path(".env")
+if env_file.exists():
+    load_dotenv(env_file)
+
+# Initialize Datadog early, before other imports that might use the tracer
+from joinly.utils.datadog import initialize_datadog  # noqa: E402
+
+initialize_datadog()
+
+from joinly.server import mcp  # noqa: E402
+from joinly.settings import Settings, set_settings  # noqa: E402
+from joinly.utils.logging import configure_logging  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

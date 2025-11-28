@@ -25,4 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV XDG_RUNTIME_DIR=/home/vscode/.xdg_runtime
 RUN mkdir -p $XDG_RUNTIME_DIR && chown vscode: $XDG_RUNTIME_DIR
 
+# Add venv to PATH for automatic activation
+ENV PATH="/home/vscode/.venv/bin:${PATH}"
+
 COPY --from=uv --chown=vscode: /uv /uvx /bin/

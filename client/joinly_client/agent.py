@@ -149,6 +149,75 @@ class ConversationalToolAgent:
                 break
             iteration += 1
 
+    def _format_llmobs_input(
+        self, messages: list[ModelMessage]
+    ) -> list[dict[str, str]]:
+        """Format messages for LLM Observability input."""
+        result = [{"role": "system", "content": self._prompt}]
+        for msg in messages:
+            if isinstance(msg, ModelRequest):
+                for part in msg.parts:
+                    if isinstance(part, UserPromptPart):
+                        content = (
+                            part.content
+                            if isinstance(part.content, str)
+                            else str(part.content)
+                        )
+                        result.append({"role": "user", "content": content})
+        return result
+
+    def _annotate_llmobs(
+        self,
+        llmobs_span: Any,  # noqa: ANN401 - ddtrace context manager type
+        input_messages: list[dict[str, str]],
+        response: ModelResponse | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        """Annotate LLMObs span with input/output data."""
+        try:
+            from ddtrace.llmobs import LLMObs
+
+            if error:
+                LLMObs.annotate(
+                    input_data=input_messages,
+                    metadata={
+                        "error": True,
+                        "error.type": type(error).__name__,
+                        "error.message": str(error),
+                    },
+                )
+                llmobs_span.__exit__(type(error), error, error.__traceback__)
+            elif response:
+                response_texts = [
+                    content
+                    for p in response.parts
+                    if isinstance(content := getattr(p, "content", None), str)
+                ]
+                input_tokens = response.usage.request_tokens or 0
+                output_tokens = response.usage.response_tokens or 0
+                LLMObs.annotate(
+                    input_data=input_messages,
+                    output_data=[
+                        {"role": "assistant", "content": t} for t in response_texts
+                    ]
+                    or None,
+                    metrics={
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": input_tokens + output_tokens,
+                    },
+                    metadata={
+                        "temperature": 0.2,
+                        "model": self._llm.model_name,
+                        "provider": self._llm.system,
+                    },
+                )
+                llmobs_span.__exit__(None, None, None)
+        except Exception as e:  # noqa: BLE001 - ddtrace can raise various errors
+            logger.debug("Failed to annotate LLMObs: %s", e)
+            with contextlib.suppress(Exception):
+                llmobs_span.__exit__(None, None, None)
+
     async def _call_llm(self, messages: list[ModelMessage]) -> ModelResponse:
         """Call the LLM with the current messages.
 
@@ -159,38 +228,62 @@ class ConversationalToolAgent:
             ModelResponse: The response from the LLM.
         """
         logger.debug("Calling LLM with %d messages", len(messages))
-        response = await model_request(
-            self._llm,
-            [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
-            model_settings=merge_model_settings(
-                self._llm.settings,
-                ModelSettings(
-                    temperature=0.2,
-                    parallel_tool_calls=True,
+
+        # Format input for LLM Observability
+        llmobs_input = self._format_llmobs_input(messages)
+
+        # Try to use LLMObs for proper LLM Observability
+        llmobs_span = None
+        try:
+            from ddtrace.llmobs import LLMObs
+
+            llmobs_span = LLMObs.llm(
+                model_name=self._llm.model_name,
+                model_provider=self._llm.system,
+                name="chat",
+            )
+            llmobs_span.__enter__()
+        except ImportError:
+            pass
+        except Exception as e:  # noqa: BLE001 - ddtrace is optional
+            logger.debug("LLMObs not available: %s", e)
+
+        try:
+            response = await model_request(
+                self._llm,
+                [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
+                model_settings=merge_model_settings(
+                    self._llm.settings,
+                    ModelSettings(temperature=0.2, parallel_tool_calls=True),
                 ),
-            ),
-            model_request_parameters=ModelRequestParameters(
-                function_tools=[
-                    ToolDefinition(
-                        name="end_turn",
-                        description=(
-                            "End the current response turn. "
-                            "Use this directly if no or no further response is needed."
+                model_request_parameters=ModelRequestParameters(
+                    function_tools=[
+                        ToolDefinition(
+                            name="end_turn",
+                            description="End the current response turn. "
+                            "Use this directly if no further response is needed.",
+                            parameters_json_schema={"properties": {}, "type": "object"},
                         ),
-                        parameters_json_schema={"properties": {}, "type": "object"},
-                    ),
-                    *self._tools,
-                ],
-                # do not set tool calls to required for gpt-5, seems to cause issues
-                allow_text_output=self._llm.model_name.startswith("gpt-5"),
-            ),
-        )
+                        *self._tools,
+                    ],
+                    allow_text_output=self._llm.model_name.startswith("gpt-5"),
+                ),
+            )
+        except Exception as e:
+            if llmobs_span:
+                self._annotate_llmobs(llmobs_span, llmobs_input, error=e)
+            raise
+
         logger.debug(
             "LLM response received with %d parts, %d input tokens and %d output tokens",
             len(response.parts),
             response.usage.request_tokens or 0,
             response.usage.response_tokens or 0,
         )
+
+        if llmobs_span:
+            self._annotate_llmobs(llmobs_span, llmobs_input, response=response)
+
         self._usage.add(
             "llm",
             usage={

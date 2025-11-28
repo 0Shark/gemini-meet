@@ -23,6 +23,7 @@ from joinly.types import (
     Transcript,
     Usage,
 )
+from joinly.utils.datadog import create_span, set_span_tag
 from joinly.utils.usage import get_usage, reset_usage, set_usage
 
 logger = logging.getLogger(__name__)
@@ -178,9 +179,19 @@ async def join_meeting(
     ] = None,
 ) -> str:
     """Join a meeting with the given URL and participant name."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.join_meeting(meeting_url, participant_name, passcode)
-    return "Joined meeting."
+    with create_span(
+        "meeting.join",
+        resource="join_meeting",
+        tags={
+            "meeting.has_url": meeting_url is not None,
+            "meeting.has_passcode": passcode is not None,
+            "participant.name": participant_name or "unknown",
+        },
+    ):
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        await ms.join_meeting(meeting_url, participant_name, passcode)
+        set_span_tag("meeting.status", "joined")
+        return "Joined meeting."
 
 
 @mcp.tool(
@@ -205,12 +216,24 @@ async def speak_text(
     text: Annotated[str, Field(description="Text to be spoken")],
 ) -> str:
     """Speak the given text in the meeting using TTS."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    try:
-        await ms.speak_text(text)
-    except SpeechInterruptedError as e:
-        return str(e)
-    return "Finished speaking."
+    with create_span(
+        "meeting.speak",
+        resource="speak_text",
+        tags={
+            "text.length": len(text),
+            "text.preview": text[:100] if len(text) > 100 else text,
+        },
+    ):
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        try:
+            await ms.speak_text(text)
+            set_span_tag("speech.status", "completed")
+            return "Finished speaking."
+        except SpeechInterruptedError as e:
+            set_span_tag("speech.status", "interrupted")
+            set_span_tag("error", True)
+            set_span_tag("error.type", "SpeechInterruptedError")
+            return str(e)
 
 
 @mcp.tool(
