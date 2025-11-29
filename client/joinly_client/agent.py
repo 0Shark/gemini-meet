@@ -234,6 +234,7 @@ class ConversationalToolAgent:
 
         # Try to use LLMObs for proper LLM Observability
         llmobs_span = None
+        llmobs_span_exited = False
         try:
             from ddtrace.llmobs import LLMObs
 
@@ -248,7 +249,6 @@ class ConversationalToolAgent:
         except Exception as e:  # noqa: BLE001 - ddtrace is optional
             logger.debug("LLMObs not available: %s", e)
 
-        llmobs_span_exited = False
         try:
             response = await model_request(
                 self._llm,
