@@ -15,6 +15,7 @@ from joinly.types import (
     VideoSnapshot,
 )
 from joinly.utils.clock import Clock
+from joinly.utils.datadog import create_span, set_span_tag
 from joinly.utils.events import EventBus, EventType
 
 logger = logging.getLogger(__name__)
@@ -94,27 +95,36 @@ class MeetingSession:
             passcode (str | None): The password or passcode for the meeting
                 (if required).
         """
-        await self._meeting_provider.join(meeting_url, participant_name, passcode)
-        self._clock = Clock()
-        self._transcript = Transcript()
+        with create_span(
+            "session.join_meeting",
+            resource="join_meeting",
+            tags={
+                "meeting.has_url": meeting_url is not None,
+                "participant.name": participant_name or "unknown",
+            },
+        ):
+            await self._meeting_provider.join(meeting_url, participant_name, passcode)
+            self._clock = Clock()
+            self._transcript = Transcript()
 
-        _unsubscribe: Callable[[], None] | None = None
+            _unsubscribe: Callable[[], None] | None = None
 
-        async def unmute_on_start() -> None:
-            """Unmute the participant when the meeting starts."""
-            if _unsubscribe is not None:
-                _unsubscribe()
-            with contextlib.suppress(Exception):
-                await self._meeting_provider.unmute()
+            async def unmute_on_start() -> None:
+                """Unmute the participant when the meeting starts."""
+                if _unsubscribe is not None:
+                    _unsubscribe()
+                with contextlib.suppress(Exception):
+                    await self._meeting_provider.unmute()
 
-        _unsubscribe = self._event_bus.subscribe("segment", unmute_on_start)
+            _unsubscribe = self._event_bus.subscribe("segment", unmute_on_start)
 
-        await self._transcription_controller.start(
-            self._clock, self._transcript, self._event_bus
-        )
-        await self._speech_controller.start(
-            self._clock, self._transcript, self._event_bus
-        )
+            await self._transcription_controller.start(
+                self._clock, self._transcript, self._event_bus
+            )
+            await self._speech_controller.start(
+                self._clock, self._transcript, self._event_bus
+            )
+            set_span_tag("session.status", "active")
 
     async def leave_meeting(self) -> None:
         """Leave the current meeting."""
@@ -128,7 +138,14 @@ class MeetingSession:
         Args:
             text (str): The text to be spoken.
         """
-        await self._speech_controller.speak_text(text)
+        with create_span(
+            "session.speak_text",
+            resource="speak_text",
+            tags={
+                "text.length": len(text),
+            },
+        ):
+            await self._speech_controller.speak_text(text)
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.

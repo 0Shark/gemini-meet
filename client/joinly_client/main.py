@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import warnings
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
@@ -9,10 +10,29 @@ import click
 from dotenv import load_dotenv
 from fastmcp import Client, FastMCP
 
-from joinly_client.agent import ConversationalToolAgent
-from joinly_client.client import JoinlyClient
-from joinly_client.types import McpClientConfig, TranscriptSegment
-from joinly_client.utils import get_llm, get_prompt, load_tools
+# Suppress pydantic-ai warnings about additionalProperties (Gemini compatibility)
+warnings.filterwarnings(
+    "ignore",
+    message=".*additionalProperties.*",
+    category=UserWarning,
+    module="pydantic_ai.*",
+)
+
+# Try to load .env file automatically if it exists (before Datadog initialization)
+# This ensures environment variables are available when Datadog initializes
+env_file = Path(".env")
+if env_file.exists():
+    load_dotenv(env_file)
+
+# Initialize Datadog early, before other imports that might use the tracer
+from joinly_client.datadog import initialize_datadog  # noqa: E402
+
+initialize_datadog()
+
+from joinly_client.agent import ConversationalToolAgent  # noqa: E402
+from joinly_client.client import JoinlyClient  # noqa: E402
+from joinly_client.types import McpClientConfig, TranscriptSegment  # noqa: E402
+from joinly_client.utils import get_llm, get_prompt, load_tools  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

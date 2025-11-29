@@ -71,6 +71,8 @@ OPENAI_API_KEY=your-openai-api-key
 
 > [!NOTE]
 > See [.env.example](.env.example) for complete configuration options including Anthropic (Claude) and Ollama setups. Replace the placeholder values with your actual API keys and adjust the model name as needed. Delete the placeholder values of the providers you don't use.
+>
+> **For Google LLM (Gemini/Vertex AI) setup**, see the detailed guide: [GOOGLE_LLM_SETUP.md](GOOGLE_LLM_SETUP.md)
 
 
 Pull the Docker image (~2.3GB since it packages browser and models):
