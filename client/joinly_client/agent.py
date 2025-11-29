@@ -234,6 +234,7 @@ class ConversationalToolAgent:
 
         # Try to use LLMObs for proper LLM Observability
         llmobs_span = None
+        llmobs_span_exited = False
         try:
             from ddtrace.llmobs import LLMObs
 
@@ -272,6 +273,7 @@ class ConversationalToolAgent:
         except Exception as e:
             if llmobs_span:
                 self._annotate_llmobs(llmobs_span, llmobs_input, error=e)
+                llmobs_span_exited = True
             raise
 
         logger.debug(
@@ -281,7 +283,7 @@ class ConversationalToolAgent:
             response.usage.response_tokens or 0,
         )
 
-        if llmobs_span:
+        if llmobs_span and not llmobs_span_exited:
             self._annotate_llmobs(llmobs_span, llmobs_input, response=response)
 
         self._usage.add(
