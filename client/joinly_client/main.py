@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 import warnings
@@ -379,7 +380,27 @@ async def run(  # noqa: PLR0913
             await stack.enter_async_context(additional_client)
             logger.debug("Connected to %s", client_name)
 
-        joinly_config = McpClientConfig(client=client.client, exclude=["join_meeting"])
+        # Event to signal when the meeting has ended
+        meeting_ended = asyncio.Event()
+
+        # Callback to detect when leave_meeting is called via tool
+        from mcp.types import CallToolResult
+
+        async def on_tool_result(
+            tool_name: str, args: dict[str, Any], result: CallToolResult
+        ) -> CallToolResult:
+            """Handle tool results and detect meeting leave."""
+            if tool_name == "leave_meeting" and not result.isError:
+                logger.info("Meeting left via tool, shutting down...")
+                client.joined = False
+                meeting_ended.set()
+            return result
+
+        joinly_config = McpClientConfig(
+            client=client.client,
+            exclude=["join_meeting"],
+            post_callback=on_tool_result,
+        )
         tools, tool_executor = await load_tools(
             joinly_config
             if not additional_clients
@@ -402,10 +423,11 @@ async def run(  # noqa: PLR0913
             ),
         )
         client.add_utterance_callback(agent.on_utterance)
+
         async with agent:
             await client.join_meeting(meeting_url)
             try:
-                await asyncio.Event().wait()
+                await meeting_ended.wait()
             finally:
                 usage = agent.usage.merge(await client.get_usage())
                 if usage.root:

@@ -23,7 +23,13 @@ from joinly.types import (
     Transcript,
     Usage,
 )
-from joinly.utils.datadog import create_span, set_span_tag
+from joinly.utils.datadog import (
+    track_meeting_join,
+    track_meeting_leave,
+    track_speech,
+    track_tool,
+    track_error,
+)
 from joinly.utils.usage import get_usage, reset_usage, set_usage
 
 logger = logging.getLogger(__name__)
@@ -179,19 +185,20 @@ async def join_meeting(
     ] = None,
 ) -> str:
     """Join a meeting with the given URL and participant name."""
-    with create_span(
-        "meeting.join",
-        resource="join_meeting",
-        tags={
-            "meeting.has_url": meeting_url is not None,
-            "meeting.has_passcode": passcode is not None,
-            "participant.name": participant_name or "unknown",
-        },
-    ):
-        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-        await ms.join_meeting(meeting_url, participant_name, passcode)
-        set_span_tag("meeting.status", "joined")
-        return "Joined meeting."
+    with track_meeting_join(
+        meeting_url=meeting_url,
+        participant_name=participant_name,
+    ) as ctx_dd:
+        try:
+            ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+            await ms.join_meeting(meeting_url, participant_name, passcode)
+            ctx_dd["output_data"] = "Joined meeting successfully"
+            ctx_dd["metadata"]["status"] = "joined"
+            ctx_dd["metadata"]["has_passcode"] = passcode is not None
+            return "Joined meeting."
+        except Exception as e:
+            track_error(e, operation="join_meeting")
+            raise
 
 
 @mcp.tool(
@@ -202,9 +209,16 @@ async def leave_meeting(
     ctx: Context,
 ) -> str:
     """Leave the current meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.leave_meeting()
-    return "Left the meeting."
+    with track_meeting_leave() as ctx_dd:
+        try:
+            ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+            await ms.leave_meeting()
+            ctx_dd["output_data"] = "Left meeting successfully"
+            ctx_dd["metadata"]["status"] = "left"
+            return "Left the meeting."
+        except Exception as e:
+            track_error(e, operation="leave_meeting")
+            raise
 
 
 @mcp.tool(
@@ -216,23 +230,18 @@ async def speak_text(
     text: Annotated[str, Field(description="Text to be spoken")],
 ) -> str:
     """Speak the given text in the meeting using TTS."""
-    with create_span(
-        "meeting.speak",
-        resource="speak_text",
-        tags={
-            "text.length": len(text),
-            "text.preview": text[:100] if len(text) > 100 else text,
-        },
-    ):
+    with track_speech(text) as ctx_dd:
         ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
         try:
             await ms.speak_text(text)
-            set_span_tag("speech.status", "completed")
+            ctx_dd["output_data"] = "Finished speaking"
+            ctx_dd["metadata"]["status"] = "completed"
             return "Finished speaking."
         except SpeechInterruptedError as e:
-            set_span_tag("speech.status", "interrupted")
-            set_span_tag("error", True)
-            set_span_tag("error.type", "SpeechInterruptedError")
+            ctx_dd["output_data"] = str(e)
+            ctx_dd["metadata"]["status"] = "interrupted"
+            ctx_dd["metadata"]["interrupted"] = True
+            ctx_dd["metadata"]["spoken_text"] = e.spoken_text
             return str(e)
 
 
@@ -245,9 +254,15 @@ async def send_chat_message(
     message: Annotated[str, Field(description="Message to be sent")],
 ) -> str:
     """Send a chat message in the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.send_chat_message(message)
-    return "Sent message."
+    with track_tool(
+        "chat.send",
+        arguments={"message": message[:100] if len(message) > 100 else message},
+        metadata={"message.length": len(message)},
+    ) as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        await ms.send_chat_message(message)
+        ctx_dd["output_data"] = "Sent message"
+        return "Sent message."
 
 
 @mcp.tool(
@@ -258,8 +273,12 @@ async def get_chat_history(
     ctx: Context,
 ) -> MeetingChatHistory:
     """Get the chat history from the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    return await ms.get_chat_history()
+    with track_tool("chat.get_history") as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        history = await ms.get_chat_history()
+        ctx_dd["metadata"]["message_count"] = len(history.messages)
+        ctx_dd["output_data"] = f"Retrieved {len(history.messages)} messages"
+        return history
 
 
 @mcp.tool(
@@ -290,12 +309,23 @@ async def get_transcript_tool(
     ] = 0,
 ) -> Transcript:
     """Get the transcript of the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    if mode == "first":
-        return ms.transcript.before(minutes * 60).compact()
-    if mode == "latest":
-        return ms.transcript.after(ms.meeting_seconds - minutes * 60).compact()
-    return ms.transcript.compact()
+    with track_tool(
+        "transcript.get",
+        arguments={"mode": mode, "minutes": minutes},
+    ) as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        if mode == "first":
+            transcript = ms.transcript.before(minutes * 60).compact()
+        elif mode == "latest":
+            transcript = ms.transcript.after(
+                ms.meeting_seconds - minutes * 60
+            ).compact()
+        else:
+            transcript = ms.transcript.compact()
+        ctx_dd["metadata"]["segment_count"] = len(transcript.segments)
+        ctx_dd["metadata"]["speaker_count"] = len(transcript.speakers)
+        ctx_dd["output_data"] = f"Retrieved {len(transcript.segments)} segments"
+        return transcript
 
 
 @mcp.tool(
@@ -306,8 +336,12 @@ async def get_participants(
     ctx: Context,
 ) -> MeetingParticipantList:
     """Get the list of participants in the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    return MeetingParticipantList(await ms.get_participants())
+    with track_tool("meeting.get_participants") as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        participants = await ms.get_participants()
+        ctx_dd["metadata"]["participant_count"] = len(participants)
+        ctx_dd["output_data"] = f"Retrieved {len(participants)} participants"
+        return MeetingParticipantList(participants)
 
 
 @mcp.tool(
@@ -319,13 +353,19 @@ async def get_participants(
 )
 async def get_video_snapshot(ctx: Context) -> ImageContent:
     """Get a snapshot of the current video feed."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    snapshot = await ms.get_video_snapshot()
-    return ImageContent(
-        type="image",
-        data=base64.b64encode(snapshot.data).decode(),
-        mimeType=snapshot.media_type,
-    )
+    with track_tool("video.snapshot") as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        snapshot = await ms.get_video_snapshot()
+        ctx_dd["metadata"]["image.size_bytes"] = len(snapshot.data)
+        ctx_dd["metadata"]["image.media_type"] = snapshot.media_type
+        ctx_dd["output_data"] = (
+            f"Captured {snapshot.media_type} ({len(snapshot.data)} bytes)"
+        )
+        return ImageContent(
+            type="image",
+            data=base64.b64encode(snapshot.data).decode(),
+            mimeType=snapshot.media_type,
+        )
 
 
 @mcp.tool(
@@ -336,9 +376,11 @@ async def mute_yourself(
     ctx: Context,
 ) -> str:
     """Mute yourself in the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.mute()
-    return "Muted yourself."
+    with track_tool("audio.mute") as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        await ms.mute()
+        ctx_dd["output_data"] = "Muted successfully"
+        return "Muted yourself."
 
 
 @mcp.tool(
@@ -349,9 +391,11 @@ async def unmute_yourself(
     ctx: Context,
 ) -> str:
     """Unmute yourself in the meeting."""
-    ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
-    await ms.unmute()
-    return "Unmuted yourself."
+    with track_tool("audio.unmute") as ctx_dd:
+        ms: MeetingSession = ctx.request_context.lifespan_context.meeting_session
+        await ms.unmute()
+        ctx_dd["output_data"] = "Unmuted successfully"
+        return "Unmuted yourself."
 
 
 @mcp.custom_route("/health", methods=["GET"])

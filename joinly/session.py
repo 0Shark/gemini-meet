@@ -15,7 +15,7 @@ from joinly.types import (
     VideoSnapshot,
 )
 from joinly.utils.clock import Clock
-from joinly.utils.datadog import create_span, set_span_tag
+from joinly.utils.datadog import track_task, track_tool
 from joinly.utils.events import EventBus, EventType
 
 logger = logging.getLogger(__name__)
@@ -95,14 +95,13 @@ class MeetingSession:
             passcode (str | None): The password or passcode for the meeting
                 (if required).
         """
-        with create_span(
+        with track_task(
             "session.join_meeting",
-            resource="join_meeting",
-            tags={
+            metadata={
                 "meeting.has_url": meeting_url is not None,
                 "participant.name": participant_name or "unknown",
             },
-        ):
+        ) as ctx:
             await self._meeting_provider.join(meeting_url, participant_name, passcode)
             self._clock = Clock()
             self._transcript = Transcript()
@@ -124,7 +123,8 @@ class MeetingSession:
             await self._speech_controller.start(
                 self._clock, self._transcript, self._event_bus
             )
-            set_span_tag("session.status", "active")
+            ctx["metadata"]["status"] = "active"
+            ctx["output_data"] = "Session started successfully"
 
     async def leave_meeting(self) -> None:
         """Leave the current meeting."""
@@ -138,14 +138,13 @@ class MeetingSession:
         Args:
             text (str): The text to be spoken.
         """
-        with create_span(
+        with track_task(
             "session.speak_text",
-            resource="speak_text",
-            tags={
-                "text.length": len(text),
-            },
-        ):
+            input_data=text,
+            metadata={"text.length": len(text)},
+        ) as ctx:
             await self._speech_controller.speak_text(text)
+            ctx["output_data"] = "Speech completed"
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.
