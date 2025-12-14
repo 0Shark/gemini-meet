@@ -22,26 +22,34 @@ from joinly.utils.usage import add_usage
 logger = logging.getLogger(__name__)
 
 
-class GoogleSTT(STT):
-    """Speech-to-Text (STT) service using Gemini audio understanding API."""
+class GoogleVertexSTT(STT):
+    """Speech-to-Text (STT) service using Google Vertex AI."""
 
     def __init__(
         self,
         *,
-        model_name: str = "gemini-2.5-flash",
+        project_id: str | None = None,
+        location: str | None = None,
+        model_name: str = "gemini-2.0-flash", # Vertex often gets newer models slightly later or with different version names
         prompt: str = "Generate a transcript of the speech.",
         sample_rate: int = 16000,
     ) -> None:
-        """Initialize the Gemini STT service.
+        """Initialize the Vertex AI STT service.
 
         Args:
-            model_name: The Gemini model to use for audio understanding.
-            prompt: The prompt to send with the audio to request a transcript.
-            sample_rate: The sample rate of the audio (default is 16000).
+            project_id: GCP Project ID. If None, reads from GOOGLE_CLOUD_PROJECT env var.
+            location: GCP Region (e.g., "us-central1"). If None, reads from GOOGLE_CLOUD_LOCATION env var.
+            model_name: The Gemini model to use (e.g., "gemini-1.5-flash-002").
+            prompt: The prompt to send with the audio.
+            sample_rate: The sample rate of the audio.
         """
-        if os.getenv("GEMINI_API_KEY") is None and os.getenv("GOOGLE_API_KEY") is None:
-            msg = "GEMINI_API_KEY or GOOGLE_API_KEY must be set in the environment."
-            raise ValueError(msg)
+        self._project_id = project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
+        self._location = location or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+
+        if not self._project_id:
+            raise ValueError(
+                "project_id must be provided or set in GOOGLE_CLOUD_PROJECT environment variable."
+            )
 
         self._model = model_name
         self._prompt = prompt
@@ -52,11 +60,21 @@ class GoogleSTT(STT):
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
 
     async def __aenter__(self) -> Self:
-        """Initialize the Gemini client."""
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        self._client = genai.Client(api_key=api_key)
+        """Initialize the Vertex AI client."""
+        # Initialize Client with vertexai=True
+        # This relies on 'gcloud auth application-default login' or 
+        # GOOGLE_APPLICATION_CREDENTIALS environment variable for auth.
+        self._client = genai.Client(
+            vertexai=True,
+            project=self._project_id,
+            location=self._location
+        )
 
-        logger.info("Initialized Gemini STT with model: %s", self._model)
+        logger.info(
+            "Initialized Vertex AI STT with model: %s in project: %s", 
+            self._model, 
+            self._project_id
+        )
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
@@ -66,17 +84,9 @@ class GoogleSTT(STT):
     async def stream(
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
-        """Transcribe audio stream using Gemini audio understanding.
-
-        Note: The Gemini audio understanding API is not a streaming API.
-        This method buffers the entire audio stream, then sends it for
-        transcription as a single request.
-
-        Args:
-            windows: An asynchronous iterator of audio windows to transcribe.
-
-        Yields:
-            TranscriptSegment: The transcribed segment(s).
+        """Transcribe audio stream using Vertex AI.
+        
+        Buffers stream and sends as a single request.
         """
         if self._client is None:
             msg = "STT service is not initialized."
@@ -113,18 +123,18 @@ class GoogleSTT(STT):
         wav_buffer.seek(0)
         audio_bytes = wav_buffer.getvalue()
 
-        # Send to Gemini API
+        # Send to Vertex AI
         async with self._lock:
             audio_duration_secs = calculate_audio_duration(
                 len(audio_buffer), self.audio_format
             )
             logger.debug(
-                "Sending %.2f seconds of audio to Gemini for transcription.",
+                "Sending %.2f seconds of audio to Vertex AI.",
                 audio_duration_secs,
             )
 
             try:
-                # Use inline audio data
+                # Vertex AI call is identical structure-wise using the new SDK
                 response = await self._client.aio.models.generate_content(
                     model=self._model,
                     contents=[
@@ -140,13 +150,12 @@ class GoogleSTT(STT):
 
                 # Track usage
                 add_usage(
-                    service="gemini_stt",
+                    service="vertex_stt",
                     usage={"seconds": audio_duration_secs},
-                    meta={"model": self._model},
+                    meta={"model": self._model, "project": self._project_id},
                 )
 
                 if transcribed_text:
-                    # Determine the primary speaker
                     speaker = (
                         max(speakers.items(), key=lambda item: item[1])[0]
                         if speakers
@@ -160,9 +169,9 @@ class GoogleSTT(STT):
                         speaker=speaker,
                     )
                 else:
-                    logger.info("Gemini returned an empty transcription.")
+                    logger.info("Vertex AI returned an empty transcription.")
 
             except Exception as e:
-                logger.exception("Error during Gemini transcription")
-                msg = f"Failed to transcribe audio with Gemini: {e}"
+                logger.exception("Error during Vertex AI transcription")
+                msg = f"Failed to transcribe audio with Vertex AI: {e}"
                 raise RuntimeError(msg) from e
