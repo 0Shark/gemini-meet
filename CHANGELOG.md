@@ -8,7 +8,7 @@
 - resemble.ai TTS support by @ArghaSarker (#148)
 - gemini API TTS and STT support by @SanTech0927 (#154)
 
-### joinly-client (v0.1.18)
+### gemini-meet-client (v0.1.18)
 
 - sanitize tool schema for OpenAI compatibility (#151, #153)
 
@@ -19,7 +19,7 @@
 - new supported languages for deepgram nova-3 (#143)
 - skip successful health check logs (#147)
 
-### joinly-client (v0.1.17)
+### gemini-meet-client (v0.1.17)
 
 - end agent turn on successful meeting leave (#144)
 - ephemeral tool result char limit (#140)
@@ -39,7 +39,7 @@
 - add speech event delay to avoid unwanted interruptions (#133)
 - improve hybrid VAD (#134)
 
-### joinly-client (v0.1.15)
+### gemini-meet-client (v0.1.15)
 
 - new and more detailed system prompt and instructions (#116, #135)
 - support for google as LLM provider (#118)
@@ -64,7 +64,7 @@
 
 ### joiny-client (v0.1.8)
 
-- add direct `list_tools` and `session` access to joinly client (#104)
+- add direct `list_tools` and `session` access to gemini_meet client (#104)
 - split system prompt and custom instructions (#105)
 - use one mcp cient per server, instead of stateless proxy (#106)
 - add message history limit to reduce token usage (#107)
@@ -89,7 +89,7 @@
 - fix missing links in google meet chat (#86)
 - get headers to load settings for fastmcp>=2.11 (#89)
 
-### joinly-client (v0.1.7)
+### gemini-meet-client (v0.1.7)
 
 - fix openai issues with openai>=1.99.2 (#91)
 - fix gpt-5 usage by disabling sampling settings (#94)
@@ -103,16 +103,16 @@
 
 ## v0.4.0 - 2025-08-04
 
-### New: joinly-client (v0.1.5)
+### New: gemini-meet-client (v0.1.5)
 
-- complete rewrite of all client functionality, now using a single `joinly-client` package (#84)
+- complete rewrite of all client functionality, now using a single `gemini-meet-client` package (#84)
 - support for usage in code and via cli
 
 ### Added
 
 - LLM token usage tracking for a session (#75)
 - STT/TTS API usage tracking, characters or audio minutes (#80)
-- setting session configurations via `joinly-client`
+- setting session configurations via `gemini-meet-client`
 
 ### Improvements
 

@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from joinly.container import SessionContainer
-from joinly.providers.browser.meeting_provider import PLATFORMS
-from joinly.session import MeetingSession
+from gemini_meet.container import SessionContainer
+from gemini_meet.providers.browser.meeting_provider import PLATFORMS
+from gemini_meet.session import MeetingSession
 from tests.utils.mockup_browser_controller import MockupBrowserPlatformController
 from tests.utils.mockup_browser_meeting import serve_mockup_browser_meeting
 

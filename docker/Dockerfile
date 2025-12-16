@@ -28,9 +28,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
-    JOINLY_SERVER_HOST="0.0.0.0" \
-    JOINLY_SERVER_PORT=8000 \
-    JOINLY_LOGGING_PLAIN=1
+    GEMINI_MEET_SERVER_HOST="0.0.0.0" \
+    GEMINI_MEET_SERVER_PORT=8000 \
+    GEMINI_MEET_LOGGING_PLAIN=1
 
 EXPOSE 8000
 
@@ -52,8 +52,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pulseaudio-utils \
     xvfb \
     x11vnc \
+    gnupg \
+    curl \
     && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /tmp/*
+
+# Install Datadog Agent
+RUN sh -c "echo 'deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg] https://apt.datadoghq.com/ stable 7' > /etc/apt/sources.list.d/datadog.list" \
+    && touch /usr/share/keyrings/datadog-archive-keyring.gpg \
+    && chmod a+r /usr/share/keyrings/datadog-archive-keyring.gpg \
+    && curl https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public | gpg --no-default-keyring --keyring /usr/share/keyrings/datadog-archive-keyring.gpg --import \
+    && curl https://keys.datadoghq.com/DATADOG_APT_KEY_F14F620E.public | gpg --no-default-keyring --keyring /usr/share/keyrings/datadog-archive-keyring.gpg --import \
+    && curl https://keys.datadoghq.com/DATADOG_APT_KEY_382E94DE.public | gpg --no-default-keyring --keyring /usr/share/keyrings/datadog-archive-keyring.gpg --import \
+    && apt-get update && apt-get install -y datadog-agent \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN groupadd --gid 1001 app && \
@@ -75,4 +87,4 @@ RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.p
     --whisper-model base
 
 # Set entrypoint
-ENTRYPOINT ["/app/.venv/bin/joinly"]
+ENTRYPOINT ["/app/.venv/bin/gemini-meet"]

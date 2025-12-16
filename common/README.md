@@ -1,2 +1,2 @@
 
-# Common library for joinly: Make your meetings accessible to AI Agents
+# Common library for gemini_meet: Make your meetings accessible to AI Agents

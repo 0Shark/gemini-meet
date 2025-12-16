@@ -20,6 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     xvfb \
     x11vnc \
+    gnupg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Datadog Agent
+RUN sh -c "echo 'deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg] https://apt.datadoghq.com/ stable 7' > /etc/apt/sources.list.d/datadog.list" \
+    && touch /usr/share/keyrings/datadog-archive-keyring.gpg \
+    && chmod a+r /usr/share/keyrings/datadog-archive-keyring.gpg \
+    && curl https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public | gpg --no-default-keyring --keyring /usr/share/keyrings/datadog-archive-keyring.gpg --import \
+    && curl https://keys.datadoghq.com/DATADOG_APT_KEY_F14F620E.public | gpg --no-default-keyring --keyring /usr/share/keyrings/datadog-archive-keyring.gpg --import \
+    && curl https://keys.datadoghq.com/DATADOG_APT_KEY_382E94DE.public | gpg --no-default-keyring --keyring /usr/share/keyrings/datadog-archive-keyring.gpg --import \
+    && apt-get update && apt-get install -y datadog-agent \
     && rm -rf /var/lib/apt/lists/*
 
 ENV XDG_RUNTIME_DIR=/home/vscode/.xdg_runtime

@@ -177,3 +177,7 @@ node_modules/
 .DS_Store
 
 note
+
+artifacts/
+
+vertex_credentials.json
