@@ -1,5 +1,5 @@
 {
-    "name": "joinly",
+    "name": "gemini-meet",
     "build": {
         "context": "..",
         "dockerfile": "Dockerfile"

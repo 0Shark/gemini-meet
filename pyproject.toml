@@ -1,10 +1,12 @@
 [project]
-name = "joinly"
+name = "gemini-meet"
 version = "0.5.2"
-description = "Make your meetings accessible to AI Agents"
+description = "Gemini Meet: Your AI Co-Pilot for Meetings & Coding"
 readme = "README.md"
 authors = [
-    { name = "dbrockmann", email = "dominik@joinly.ai" }
+    { name = "0Shark", email = "info@juledz.com" },
+    { name = "elmerdema", email = "elmerdema2022@gmail.com" },
+    { name = "dbrockmann", email = "dominik@gemini-meet" }
 ]
 requires-python = ">=3.12"
 dependencies = [
@@ -16,8 +18,8 @@ dependencies = [
     "faster-whisper>=1.1.1",
     "fastmcp>=2.10.5",
     "google-genai>=1.30.0",
-    "joinly-client>=0.1.18",
-    "joinly-common>=0.1.3",
+    "gemini-meet-client>=0.1.18",
+    "gemini-meet-common>=0.1.3",
     "kokoro-onnx>=0.4.9",
     "numpy>=2.2.4",
     "onnxruntime>=1.21.1",
@@ -29,7 +31,7 @@ dependencies = [
 ]
 
 [project.scripts]
-joinly = "joinly.main:cli"
+gemini_meet = "gemini_meet.main:cli"
 
 [project.optional-dependencies]
 cuda = [
@@ -50,15 +52,15 @@ dev = [
 ]
 
 [tool.uv.sources]
-joinly-client = { workspace = true }
-joinly-common = { workspace = true }
+gemini-meet-client = { workspace = true }
+gemini-meet-common = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["joinly"]
+packages = ["gemini_meet"]
 
 [tool.uv.workspace]
 members = [
@@ -131,7 +133,7 @@ pythonPlatform = "All"
 venv = ".venv"
 typeCheckingMode = "standard"
 include = [
-    "joinly",
+    "gemini_meet",
     "client",
     "common",
     "tests"

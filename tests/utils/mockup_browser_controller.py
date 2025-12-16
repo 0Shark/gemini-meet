@@ -3,7 +3,7 @@ from typing import ClassVar
 
 from playwright.async_api import Page
 
-from joinly.providers.browser.platforms.base import BaseBrowserPlatformController
+from gemini_meet.providers.browser.platforms.base import BaseBrowserPlatformController
 
 
 class MockupBrowserPlatformController(BaseBrowserPlatformController):

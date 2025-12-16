@@ -1,5 +1,5 @@
 
-# joinly-client: Client for a conversational meeting agent used with joinly
+# gemini-meet-client: Client for a conversational meeting agent used with gemini_meet
 
 ## Prerequisites
 
@@ -17,24 +17,24 @@ OPENAI_API_KEY="sk-..."
 
 For other providers, export the corresponding environment variable(s) and set provider and model with the command:
 ```bash
-uvx joinly-client --llm-provider <provider> --llm-model <model> <MeetingUrl>
+uvx gemini-meet-client --llm-provider <provider> --llm-model <model> <MeetingUrl>
 ```
 
-### Start joinly server
+### Start gemini_meet server
 
-Make sure you have a running joinly server. You can start it with:
+Make sure you have a running gemini_meet server. You can start it with:
 ```bash
-docker run -p 8000:8000 ghcr.io/joinly-ai/joinly:latest
+docker run -p 8000:8000 ghcr.io/gemini-meet/gemini_meet:latest
 ```
-For more details on joinly, see the GitHub repository: [joinly-ai/joinly](https://github.com/joinly-ai/joinly).
+For more details on gemini_meet, see the GitHub repository: [gemini-meet/gemini_meet](https://github.com/gemini-meet/gemini_meet).
 
 ## Command line usage
 
 We recommend using `uv` for running the client, you can install it using the [command in their repository](https://github.com/astral-sh/uv#Installation).
 
-Connect to a running joinly server and join a meeting, here loading environment variables from a `.env` file:
+Connect to a running gemini_meet server and join a meeting, here loading environment variables from a `.env` file:
 ```bash
-uvx joinly-client --joinly-url http://localhost:8000/mcp/ --env-file .env <MeetingUrl>
+uvx gemini-meet-client --gemini_meet-url http://localhost:8000/mcp/ --env-file .env <MeetingUrl>
 ```
 
 Add other MCP servers using a [configuration file](https://gofastmcp.com/clients/client#configuration-based-clients):
@@ -54,17 +54,17 @@ Add other MCP servers using a [configuration file](https://gofastmcp.com/clients
 ```
 
 ```bash
-uvx joinly-client --mcp-config config.json <MeetingUrl>
+uvx gemini-meet-client --mcp-config config.json <MeetingUrl>
 ```
 
-You can also set other session-specific settings for the joinly server, e.g.:
+You can also set other session-specific settings for the gemini_meet server, e.g.:
 ```bash
-uvx joinly-client --tts elevenlabs --tts-arg voice_id=EXAVITQu4vr4xnSDxMa6 --lang de <MeetingUrl>
+uvx gemini-meet-client --tts elevenlabs --tts-arg voice_id=EXAVITQu4vr4xnSDxMa6 --lang de <MeetingUrl>
 ```
 
 For a full list of command line options, run:
 ```bash
-uvx joinly-client --help
+uvx gemini-meet-client --help
 ```
 
 ## Code usage
@@ -74,22 +74,22 @@ Direct use of run function:
 import asyncio
 
 from dotenv import load_dotenv
-from joinly_client import run
+from gemini_meet_client import run
 
 load_dotenv()
 
 
 async def async_run():
     await run(
-        joinly_url="http://localhost:8000/mcp/",
+        gemini_meet_url="http://localhost:8000/mcp/",
         meeting_url="<MeetingUrl>",
         llm_provider="openai",
         llm_model="gpt-4o-mini",
-        prompt="You are joinly, a...",
-        name="joinly",
+        prompt="You are gemini_meet, a...",
+        name="gemini",
         name_trigger=False,
         mcp_config=None,  # MCP servers configuration (dict)
-        settings=None,  # settings propagated to joinly server (dict)
+        settings=None,  # settings propagated to gemini_meet server (dict)
     )
 
 
@@ -101,14 +101,14 @@ Or only using the client and a custom agent:
 ```python
 import asyncio
 
-from joinly_client import JoinlyClient
-from joinly_client.types import TranscriptSegment
+from gemini_meet_client import GeminiMeetClient
+from gemini_meet_client.data_types import TranscriptSegment
 
 
 async def run():
-    client = JoinlyClient(
+    client = GeminiMeetClient(
         url="http://localhost:8000/mcp/",
-        name="joinly",
+        name="gemini",
         name_trigger=False,
         settings=None,
     )
