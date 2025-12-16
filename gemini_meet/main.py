@@ -160,6 +160,12 @@ def _parse_kv(
     envvar="GEMINI_MEET_PROMPT_STYLE",
 )
 @click.option(
+    "--config",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    help="Path to a JSON configuration file for additional MCP servers.",
+    default=None,
+)
+@click.option(
     "--name-trigger",
     is_flag=True,
     help="Trigger the agent only when the name is mentioned in the transcript. "
@@ -311,6 +317,7 @@ def cli(  # noqa: PLR0913
     vnc_server_port: int,
     prompt: str | None,
     prompt_style: str,
+    config: str | None,
     name_trigger: bool,
     meeting_url: str | None,
     verbose: int,
@@ -346,6 +353,16 @@ def cli(  # noqa: PLR0913
                 "Please provide it as an argument."
             )
             raise click.UsageError(msg)
+
+        mcp_config_dict: dict[str, Any] | None = None
+        if config:
+            try:
+                with Path(config).open("r") as f:
+                    mcp_config_dict = json.load(f)
+            except Exception:
+                logger.exception("Failed to load MCP configuration file")
+                mcp_config_dict = None
+
         asyncio.run(
             gemini_meet_client.run(
                 gemini_meet_url=mcp,
@@ -356,6 +373,7 @@ def cli(  # noqa: PLR0913
                 prompt_style=prompt_style,
                 name=settings.name,
                 name_trigger=name_trigger,
+                mcp_config=mcp_config_dict,
             )
         )
 

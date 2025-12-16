@@ -2,8 +2,10 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 from dataclasses import replace
 from typing import Any, Self
+
 
 from pydantic_ai import BinaryContent
 from pydantic_ai.direct import model_request
@@ -37,6 +39,8 @@ class ConversationalToolAgent:
         tool_executor: ToolExecutor,
         *,
         prompt: str | None = None,
+        prompt_template: str | None = None,
+        prompt_variables: dict[str, Any] | None = None,
         max_messages: int = 50,
         max_tool_result_chars: int = 2048,
         max_ephemeral_tool_result_chars: int = 16384,
@@ -66,7 +70,10 @@ class ConversationalToolAgent:
 
         self._llm = llm
         self._prompt = prompt or get_prompt()
+        self._prompt_template = prompt_template
+        self._prompt_variables = prompt_variables
         self._tools = tools
+
         self._tool_executor = tool_executor
         self._messages: list[ModelMessage] = []
         self._max_messages = max_messages
@@ -116,38 +123,50 @@ class ConversationalToolAgent:
             segments (list[TranscriptSegment]): The segments of the transcript to
                 process.
         """
-        self._messages.append(
-            ModelRequest(
-                parts=[
-                    UserPromptPart(
-                        f"{segment.speaker or 'Participant'}: {segment.text}"
-                    )
-                    for segment in segments
-                ]
-            )
+        try:
+            from ddtrace.llmobs import LLMObs
+        except ImportError:
+            LLMObs = None
+
+        ctx = (
+            LLMObs.workflow(name="agent_run_loop")
+            if LLMObs
+            else contextlib.nullcontext()
         )
 
-        iteration: int = 0
-        self._messages = self._truncate_tool_results(
-            self._messages, max_chars=self._max_tool_result_chars
-        )
-        self._messages = self._omit_binary_tool_results(self._messages)
-        while self._max_agent_iter is None or iteration < self._max_agent_iter:
-            self._messages = self._limit_messages(
-                self._messages, max_messages=self._max_messages
+        with ctx:
+            self._messages.append(
+                ModelRequest(
+                    parts=[
+                        UserPromptPart(
+                            f"{segment.speaker or 'Participant'}: {segment.text}"
+                        )
+                        for segment in segments
+                    ]
+                )
             )
+
+            iteration: int = 0
             self._messages = self._truncate_tool_results(
-                self._messages, max_chars=self._max_ephemeral_tool_result_chars
+                self._messages, max_chars=self._max_tool_result_chars
             )
+            self._messages = self._omit_binary_tool_results(self._messages)
+            while self._max_agent_iter is None or iteration < self._max_agent_iter:
+                self._messages = self._limit_messages(
+                    self._messages, max_messages=self._max_messages
+                )
+                self._messages = self._truncate_tool_results(
+                    self._messages, max_chars=self._max_ephemeral_tool_result_chars
+                )
 
-            response = await self._call_llm(self._messages)
-            request = await self._call_tools(response)
-            self._messages.append(response)
-            if request:
-                self._messages.append(request)
-            if self._check_end_turn(response, request):
-                break
-            iteration += 1
+                response = await self._call_llm(self._messages)
+                request = await self._call_tools(response)
+                self._messages.append(response)
+                if request:
+                    self._messages.append(request)
+                if self._check_end_turn(response, request):
+                    break
+                iteration += 1
 
     def _format_llmobs_input(
         self, messages: list[ModelMessage]
@@ -259,26 +278,59 @@ class ConversationalToolAgent:
             logger.debug("LLMObs not available: %s", e)
 
         try:
-            response = await model_request(
-                self._llm,
-                [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
-                model_settings=merge_model_settings(
-                    self._llm.settings,
-                    ModelSettings(temperature=0.2, parallel_tool_calls=True),
-                ),
-                model_request_parameters=ModelRequestParameters(
-                    function_tools=[
-                        ToolDefinition(
-                            name="end_turn",
-                            description="End the current response turn. "
-                            "Use this directly if no further response is needed.",
-                            parameters_json_schema={"properties": {}, "type": "object"},
-                        ),
-                        *self._tools,
-                    ],
-                    allow_text_output=self._llm.model_name.startswith("gpt-5"),
-                ),
-            )
+            # Prepare prompt metadata for Datadog
+            dd_prompt_context = contextlib.nullcontext()
+            local_llmobs = None
+            try:
+                from ddtrace.llmobs import LLMObs as DDLLMObs
+
+                local_llmobs = DDLLMObs
+            except ImportError:
+                pass
+
+            if self._prompt_template and local_llmobs:
+                try:
+                    # Convert Python style {var} to Datadog/Mustache style {{var}}
+                    # for the template string
+                    dd_template = re.sub(
+                        r"(?<!{){([a-zA-Z0-9_]+)}(?!})",
+                        r"{{\1}}",
+                        self._prompt_template,
+                    )
+                    dd_prompt_context = local_llmobs.annotation_context(
+                        prompt={
+                            "template": dd_template,
+                            "variables": self._prompt_variables or {},
+                            "id": "agent-system-prompt",
+                        }
+                    )
+                except Exception:
+                    logger.debug("Failed to create LLMObs prompt context")
+
+            with dd_prompt_context:
+                response = await model_request(
+                    self._llm,
+                    [ModelRequest(parts=[SystemPromptPart(self._prompt)]), *messages],
+                    model_settings=merge_model_settings(
+                        self._llm.settings,
+                        ModelSettings(temperature=0.2, parallel_tool_calls=True),
+                    ),
+                    model_request_parameters=ModelRequestParameters(
+                        function_tools=[
+                            ToolDefinition(
+                                name="end_turn",
+                                description="End the current response turn. "
+                                "Use this directly if no further response is needed.",
+                                parameters_json_schema={
+                                    "properties": {},
+                                    "type": "object",
+                                },
+                            ),
+                            *self._tools,
+                        ],
+                        allow_text_output=self._llm.model_name.startswith("gpt-5"),
+                    ),
+                )
         except Exception as e:
             if llmobs_span:
                 self._annotate_llmobs(llmobs_span, llmobs_input, error=e)
@@ -360,12 +412,37 @@ class ConversationalToolAgent:
         )
 
         try:
-            content = await self._tool_executor(
-                tool_call.tool_name, tool_call.args_as_dict()
-            )
-        except Exception:
+            from ddtrace.llmobs import LLMObs
+        except ImportError:
+            LLMObs = None
+
+        ctx = (
+            LLMObs.tool(name=tool_call.tool_name)
+            if LLMObs
+            else contextlib.nullcontext()
+        )
+
+        try:
+            with ctx as span:
+                if span and LLMObs:
+                    LLMObs.annotate(input_data=tool_call.args_as_dict())
+
+                content = await self._tool_executor(
+                    tool_call.tool_name, tool_call.args_as_dict()
+                )
+
+                if span and LLMObs:
+                    # Basic string representation for output, avoiding large binary data
+                    output_str = (
+                        f"BinaryContent({content.media_type}, {len(content.data)} bytes)"
+                        if isinstance(content, BinaryContent)
+                        else str(content)
+                    )
+                    LLMObs.annotate(output_data=output_str)
+
+        except Exception as e:
             logger.exception("Error calling tool %s", tool_call.tool_name)
-            content = f"Error calling tool {tool_call.tool_name}"
+            content = f"Error calling tool {tool_call.tool_name}: {e}"
 
         logger.info(
             "%s: %s",

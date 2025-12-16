@@ -83,6 +83,34 @@ def get_llm(llm_provider: str, model_name: str) -> Model:
     return model
 
 
+def get_prompt_components(
+    template: str | None = None,
+    instructions: str | None = None,
+    prompt_style: str | None = None,
+    name: str = "gemini",
+) -> tuple[str, str, dict[str, Any]]:
+    """Get the prompt components (formatted, template, variables).
+
+    Args:
+        template (str): The prompt template to use. Defaults to DEFAULT_PROMPT_TEMPLATE.
+        instructions (str): Instructions for the agent.
+        If None, uses instructions based on prompt_style.
+        prompt_style (str): The type of default instructions to use. Defaults to "mpc".
+        name (str): The name of the agent. Defaults to 'gemini'.
+
+    Returns:
+        tuple[str, str, dict[str, Any]]: The formatted prompt, the template, and the variables.
+    """
+    template = template if template is not None else DEFAULT_PROMPT_TEMPLATE
+    if instructions is None:
+        instructions = (
+            DYADIC_INSTRUCTIONS if prompt_style == "dyadic" else MPC_INSTRUCTIONS
+        )
+    today = datetime.now(tz=UTC).date().isoformat()
+    variables = {"date": today, "name": name, "instructions": instructions}
+    return template.format(**variables), template, variables
+
+
 def get_prompt(
     template: str | None = None,
     instructions: str | None = None,
@@ -101,13 +129,13 @@ def get_prompt(
     Returns:
         str: The formatted prompt template.
     """
-    template = template if template is not None else DEFAULT_PROMPT_TEMPLATE
-    if instructions is None:
-        instructions = (
-            DYADIC_INSTRUCTIONS if prompt_style == "dyadic" else MPC_INSTRUCTIONS
-        )
-    today = datetime.now(tz=UTC).date().isoformat()
-    return template.format(date=today, name=name, instructions=instructions)
+    formatted, _, _ = get_prompt_components(
+        template=template,
+        instructions=instructions,
+        prompt_style=prompt_style,
+        name=name,
+    )
+    return formatted
 
 
 class _Mapper(MCPServer):
@@ -247,7 +275,20 @@ async def load_tools(  # noqa: C901
             client = clients.client
             post_callback = clients.post_callback
         else:
-            prefix, tool_name = tool_name.split("_", 1)
+            found_prefix = None
+            # Sort prefixes by length descending to match the longest prefix first
+            # This handles cases where one prefix might be a substring of another (e.g. "gemini" and "gemini_meet")
+            for prefix in sorted(clients.keys(), key=len, reverse=True):
+                if tool_name.startswith(f"{prefix}_"):
+                    found_prefix = prefix
+                    break
+
+            if found_prefix:
+                prefix = found_prefix
+                tool_name = tool_name[len(prefix) + 1 :]
+            else:
+                prefix, tool_name = tool_name.split("_", 1)
+
             if prefix not in clients:
                 msg = f"MCP '{prefix}' not found"
                 raise ValueError(msg)

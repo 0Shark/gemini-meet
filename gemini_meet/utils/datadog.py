@@ -121,9 +121,11 @@ def initialize_datadog() -> None:
     # Configure sampling rate if APM is enabled
     if apm_enabled:
         try:
-            from ddtrace import config, tracer
+            from ddtrace import config
+            from ddtrace.trace import tracer
 
             sample_rate = float(os.getenv("DD_TRACE_SAMPLE_RATE", "1.0"))
+
             config.trace_sample_rate = sample_rate
 
             # Set global tags on tracer
@@ -193,6 +195,20 @@ def _patch_libraries(patch: Any) -> None:
     except Exception:
         logger.debug("aiohttp patching skipped")
 
+    # LangChain
+    try:
+        patch(langchain=True)
+        logger.debug("Patched LangChain for Datadog")
+    except Exception:
+        logger.debug("LangChain patching skipped")
+
+    # Google Generative AI
+    try:
+        patch(google_generativeai=True)
+        logger.debug("Patched Google Generative AI for Datadog")
+    except Exception:
+        logger.debug("Google Generative AI patching skipped")
+
 
 def get_tracer() -> Any:
     """Get the Datadog tracer instance.
@@ -201,7 +217,7 @@ def get_tracer() -> Any:
         The Datadog tracer instance, or None if Datadog is not available.
     """
     try:
-        from ddtrace import tracer
+        from ddtrace.trace import tracer
 
         return tracer
     except ImportError:

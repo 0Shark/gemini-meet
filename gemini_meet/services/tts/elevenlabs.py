@@ -64,6 +64,30 @@ class ElevenlabsTTS(TTS):
             meta={"model": self._model_id, "voice": self._voice_id},
         )
 
+        try:
+            from ddtrace.llmobs import LLMObs
+        except ImportError:
+            LLMObs = None
+
+        if LLMObs:
+            with LLMObs.tool(name="elevenlabs_tts", ml_app="gemini-meet") as span:
+                LLMObs.annotate(
+                    input_data=text,
+                    metadata={
+                        "voice_id": self._voice_id,
+                        "model_id": self._model_id,
+                        "language_code": language_code,
+                    },
+                    metrics={"characters": len(text)},
+                )
+                return self._client.text_to_speech.stream(
+                    text=text,
+                    voice_id=self._voice_id,
+                    model_id=self._model_id,
+                    output_format=self._output_format,
+                    language_code=language_code,
+                )
+
         return self._client.text_to_speech.stream(
             text=text,
             voice_id=self._voice_id,

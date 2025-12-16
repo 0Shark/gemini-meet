@@ -150,3 +150,17 @@ def _patch_libraries(patch: Any) -> None:
         logger.debug("Patched aiohttp for Datadog")
     except Exception:
         logger.debug("aiohttp patching skipped")
+
+    # LangChain
+    try:
+        patch(langchain=True)
+        logger.debug("Patched LangChain for Datadog")
+    except Exception:
+        logger.debug("LangChain patching skipped")
+
+    # Google Generative AI
+    try:
+        patch(google_generativeai=True)
+        logger.debug("Patched Google Generative AI for Datadog")
+    except Exception:
+        logger.debug("Google Generative AI patching skipped")

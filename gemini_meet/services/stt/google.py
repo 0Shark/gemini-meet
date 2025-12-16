@@ -133,24 +133,65 @@ class GoogleVertexSTT(STT):
 
             try:
                 # Vertex AI call is identical structure-wise using the new SDK
-                response = await self._client.aio.models.generate_content(
-                    model=self._model,
-                    contents=[
-                        self._prompt,
-                        types.Part.from_bytes(
-                            data=audio_bytes,
-                            mime_type="audio/wav",
-                        ),
-                    ],
-                )
+                try:
+                    from ddtrace.llmobs import LLMObs
+                except ImportError:
+                    LLMObs = None
 
-                transcribed_text = (response.text or "").strip()
+                if LLMObs:
+                    with LLMObs.llm(
+                        model_name=self._model,
+                        model_provider="google",
+                        name="transcribe_audio",
+                    ) as span:
+                        LLMObs.annotate(
+                            input_data=self._prompt,
+                            metadata={"audio_duration": audio_duration_secs},
+                        )
+                        response = await self._client.aio.models.generate_content(
+                            model=self._model,
+                            contents=[
+                                self._prompt,
+                                types.Part.from_bytes(
+                                    data=audio_bytes,
+                                    mime_type="audio/wav",
+                                ),
+                            ],
+                        )
+                        transcribed_text = (response.text or "").strip()
+                        LLMObs.annotate(
+                            output_data=transcribed_text,
+                            metrics={
+                                "audio_seconds": audio_duration_secs,
+                                "input_tokens": response.usage_metadata.prompt_token_count
+                                if response.usage_metadata
+                                else 0,
+                                "output_tokens": response.usage_metadata.candidates_token_count
+                                if response.usage_metadata
+                                else 0,
+                            },
+                        )
+                else:
+                    response = await self._client.aio.models.generate_content(
+                        model=self._model,
+                        contents=[
+                            self._prompt,
+                            types.Part.from_bytes(
+                                data=audio_bytes,
+                                mime_type="audio/wav",
+                            ),
+                        ],
+                    )
+                    transcribed_text = (response.text or "").strip()
 
                 # Track usage
                 add_usage(
                     service="vertex_stt",
                     usage={"seconds": audio_duration_secs},
-                    meta={"model": self._model, "project": self._project_id},
+                    meta={
+                        "model": self._model,
+                        "project": self._project_id or "unknown",
+                    },
                 )
 
                 if transcribed_text:

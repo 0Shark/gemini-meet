@@ -32,7 +32,12 @@ initialize_datadog()
 from gemini_meet_client.agent import ConversationalToolAgent  # noqa: E402
 from gemini_meet_client.client import GeminiMeetClient  # noqa: E402
 from gemini_meet_client.data_types import McpClientConfig, TranscriptSegment  # noqa: E402
-from gemini_meet_client.utils import get_llm, get_prompt, load_tools  # noqa: E402
+from gemini_meet_client.utils import (  # noqa: E402
+    get_llm,
+    get_prompt,
+    get_prompt_components,
+    load_tools,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -398,17 +403,23 @@ async def run(  # noqa: PLR0913
                 },
             }
         )
+
+        formatted_prompt, prompt_template, prompt_variables = get_prompt_components(
+            instructions=prompt,
+            prompt_style=prompt_style,
+            name=client.name,
+        )
+
         agent = ConversationalToolAgent(
             llm,
             tools,
             tool_executor,
-            prompt=get_prompt(
-                instructions=prompt,
-                prompt_style=prompt_style,
-                name=client.name,
-            ),
+            prompt=formatted_prompt,
+            prompt_template=prompt_template,
+            prompt_variables=prompt_variables,
         )
         client.add_utterance_callback(agent.on_utterance)
+
         async with agent:
             await client.join_meeting(meeting_url)
             try:
