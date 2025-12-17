@@ -185,7 +185,10 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 yield self._page, self._platform_controller
             except Exception as e:
                 msg = f"Failed to perform '{action}'."
-                logger.exception(msg)
+                if "Target crashed" in str(e):
+                    logger.warning("%s Browser target crashed.", msg)
+                else:
+                    logger.exception(msg)
                 if isinstance(e, (ProviderNotSupportedError, ValueError)):
                     raise
                 raise RuntimeError(msg) from None
@@ -266,18 +269,22 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
 
     async def leave(self) -> None:
         """Leave the current meeting."""
-        async with self._action_guard("leave") as (page, controller):
-            try:
-                await controller.leave(page)
-            except RuntimeError:
-                logger.warning(
-                    "Failed to leave the meeting, forcing page close.", exc_info=True
-                )
-            finally:
-                self._platform_controller = None
-                if self._page is not None and not self._page.is_closed():
-                    await self._page.close()
-                self._page = None
+        try:
+            async with self._action_guard("leave") as (page, controller):
+                try:
+                    await controller.leave(page)
+                except RuntimeError:
+                    logger.warning(
+                        "Failed to leave the meeting, forcing page close.",
+                        exc_info=True,
+                    )
+                finally:
+                    self._platform_controller = None
+                    if self._page is not None and not self._page.is_closed():
+                        await self._page.close()
+                    self._page = None
+        except RuntimeError:
+            pass
 
     async def send_chat_message(self, message: str) -> None:
         """Send a chat message in the meeting.
