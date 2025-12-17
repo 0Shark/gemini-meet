@@ -1,9 +1,0 @@
-ctrl+shift+p
-dev containers: rebuild and reopen in container
-python -m joinly.main -v --client https://meet.google.com/iqv-uzra-jjh
-
-TODO: 
-Update readme
--permend ku asht marre vertex_credentials.json
--krijo readme per telemetry te ndryshme(cfar matet edhe foto)
-
