@@ -120,7 +120,7 @@ async def run(  # noqa: C901
 
     prompt = (
         f"Today is {datetime.datetime.now(tz=datetime.UTC).strftime('%d.%m.%Y')}. "
-        "You are joinly, a professional and knowledgeable meeting assistant. "
+        "You are gemini_meet, a professional and knowledgeable meeting assistant. "
         "Provide concise, valuable contributions in the meeting. "
         "You are only with one other participant in the meeting, therefore "
         "respond to all messages and questions. "
@@ -133,44 +133,44 @@ async def run(  # noqa: C901
         "If interrupted mid-response, use 'finish'."
     )
 
-    # optionally, set settings for joinly (requires v0.3.2)
+    # optionally, set settings for gemini_meet (requires v0.3.2)
     settings = {
-        # "name": "joinly",  # noqa: ERA001
+        # "name": "gemini_meet",  # noqa: ERA001
         # "language": "en",  # noqa: ERA001
         # "tts": "elevenlabs",  # noqa: ERA001
     }
     transport = StreamableHttpTransport(
-        url=mcp_url, headers={"joinly-settings": json.dumps(settings)}
+        url=mcp_url, headers={"gemini-meet-settings": json.dumps(settings)}
     )
 
-    # separate joinly client, since fastmcp does not support notifications
+    # separate gemini_meet client, since fastmcp does not support notifications
     # in proxy server mode yet (v2.7.0)
-    joinly_client = Client(transport, message_handler=_message_handler)
+    gemini_meet_client = Client(transport, message_handler=_message_handler)
     client = Client(config) if config and config.get("mcpServers") else None
 
     mcp_servers = list(config.get("mcpServers", {}).keys()) if config else None
     logger.info(
-        "Connecting to joinly MCP server at %s and following other MCP servers: %s",
+        "Connecting to gemini_meet MCP server at %s and following other MCP servers: %s",
         mcp_url,
         mcp_servers,
     )
-    async with joinly_client, client or contextlib.nullcontext():
-        if joinly_client.is_connected():
-            logger.info("Connected to joinly MCP server")
+    async with gemini_meet_client, client or contextlib.nullcontext():
+        if gemini_meet_client.is_connected():
+            logger.info("Connected to gemini_meet MCP server")
         else:
-            logger.error("Failed to connect to joinly MCP server at %s", mcp_url)
+            logger.error("Failed to connect to gemini_meet MCP server at %s", mcp_url)
         if client and not client.is_connected():
             logger.error("Failed to connect to additional MCP servers: %s", mcp_servers)
 
-        await joinly_client.session.subscribe_resource(transcript_url)
+        await gemini_meet_client.session.subscribe_resource(transcript_url)
 
         @tool(return_direct=True)
         def finish() -> str:
             """Finish tool to end the turn."""
             return "Finished."
 
-        # load tools from joinly and other MCP servers
-        tools = await load_mcp_tools(joinly_client.session)
+        # load tools from gemini_meet and other MCP servers
+        tools = await load_mcp_tools(gemini_meet_client.session)
         if client:
             tools.extend(await load_mcp_tools(client.session))
         tools.append(finish)
@@ -185,13 +185,13 @@ async def run(  # noqa: C901
         last_time = -1.0
 
         logger.info("Joining meeting at %s", meeting_url)
-        await joinly_client.call_tool("join_meeting", {"meeting_url": meeting_url})
+        await gemini_meet_client.call_tool("join_meeting", {"meeting_url": meeting_url})
         logger.info("Joined meeting successfully")
 
         while True:
             await transcript_event.wait()
             transcript_full = Transcript.model_validate_json(
-                (await joinly_client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
+                (await gemini_meet_client.read_resource(transcript_url))[0].text  # type: ignore[attr-defined]
             )
             transcript = transcript_after(transcript_full, after=last_time)
             transcript_event.clear()
@@ -237,7 +237,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run a conversational agent for a meeting using joinly.ai. "
+            "Run a conversational agent for a meeting using gemini-meet. "
             "Optionally, connect to different MCP servers."
         )
     )
@@ -246,18 +246,18 @@ if __name__ == "__main__":
         "--mcp-url",
         dest="mcp_url",
         default="http://localhost:8000/mcp/",
-        help="The URL of the joinly MCP server",
+        help="The URL of the gemini_meet MCP server",
     )
     parser.add_argument(
         "--model-name",
         dest="model_name",
-        default=os.getenv("JOINLY_MODEL_NAME", "gpt-4o"),
+        default=os.getenv("GEMINI_MEET_MODEL_NAME", "gpt-4o"),
         help="The model to use for the agent",
     )
     parser.add_argument(
         "--model-provider",
         dest="model_provider",
-        default=os.getenv("JOINLY_MODEL_PROVIDER"),
+        default=os.getenv("GEMINI_MEET_MODEL_PROVIDER"),
         help="The provider for the model",
     )
     parser.add_argument(

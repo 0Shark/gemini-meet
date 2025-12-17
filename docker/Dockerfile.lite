@@ -22,7 +22,7 @@ COPY . /app
 
 # Remove packages
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv remove --no-sync faster-whisper kokoro-onnx joinly-client
+    uv remove --no-sync faster-whisper kokoro-onnx gemini-meet-client
 
 # Install application into .venv (non-editable mode)
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -32,9 +32,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
-    JOINLY_SERVER_HOST="0.0.0.0" \
-    JOINLY_SERVER_PORT=8000 \
-    JOINLY_LOGGING_PLAIN=1
+    GEMINI_MEET_SERVER_HOST="0.0.0.0" \
+    GEMINI_MEET_SERVER_PORT=8000 \
+    GEMINI_MEET_LOGGING_PLAIN=1
 
 EXPOSE 8000
 
@@ -76,4 +76,4 @@ RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.p
     --assets playwright silero
 
 # Set entrypoint
-ENTRYPOINT ["/app/.venv/bin/joinly"]
+ENTRYPOINT ["/app/.venv/bin/gemini-meet"]

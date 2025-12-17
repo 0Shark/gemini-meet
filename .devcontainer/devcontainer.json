@@ -1,5 +1,5 @@
 {
-    "name": "joinly",
+    "name": "gemini-meet",
     "build": {
         "context": "..",
         "dockerfile": "Dockerfile"
@@ -30,5 +30,11 @@
     },
     "postCreateCommand": "uv sync --frozen && uv run scripts/download_assets.py",
     "postStartCommand": "uv run pre-commit install",
-    "remoteUser": "vscode"
+    "remoteUser": "vscode",
+    "runArgs": [
+        "--gpus",
+        "all",
+        "--runtime",
+        "nvidia"
+    ]
 }

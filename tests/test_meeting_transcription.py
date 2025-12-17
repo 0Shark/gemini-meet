@@ -5,8 +5,8 @@ import jiwer
 from mcp import ResourceUpdatedNotification, ServerNotification
 from pydantic import AnyUrl
 
-from joinly.session import MeetingSession
-from joinly.types import Transcript
+from gemini_meet.session import MeetingSession
+from gemini_meet.data_types import Transcript
 
 
 async def test_meeting_transcription_mockup(
@@ -88,7 +88,7 @@ async def _run_mcp_meeting_transcription_test(
     """
     from fastmcp import Client
 
-    from joinly.server import mcp
+    from gemini_meet.server import mcp
 
     transcript_url = AnyUrl("transcript://live")
     transcription_update_count = 0

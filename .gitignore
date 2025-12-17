@@ -175,3 +175,11 @@ cython_debug/
 
 node_modules/
 .DS_Store
+
+note
+
+artifacts/
+
+vertex_credentials.json
+
+config_meet.json
