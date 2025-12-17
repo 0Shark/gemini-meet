@@ -1,0 +1,22 @@
+{
+  "name": "Transcript Drift / STT Failure (Google/Gemini)",
+  "type": "query alert",
+  "query": "sum(last_2m): ( sum:gemini_meet.stt.transcription_error{stt:google}.as_count() / ( sum:gemini_meet.stt.transcription_error{stt:google}.as_count() + sum:gemini_meet.stt.transcription_success{stt:google}.as_count() ) ) * 100 > 5",
+  "message": "{{#is_alert}}\n**STT Failure Spike Detected**\nError rate is {{value}}% (Threshold: 5%)\n\n**Context:**\n- Provider: Google (Gemini)\n- Drift Metric: Check `gemini_meet.stt.drift` dashboard.\n\n**Action:**\n@pagerduty-gemini_meet-critical \n{{/is_alert}}",
+  "tags": [
+    "service:gemini_meet-stt",
+    "stt:google",
+    "env:production"
+  ],
+  "options": {
+    "notify_no_data": false,
+    "renotify_interval": 10,
+    "thresholds": {
+      "critical": 5,
+      "warning": 3
+    },
+    "notify_audit": false,
+    "include_tags": true,
+    "new_host_delay": 300
+  }
+}
