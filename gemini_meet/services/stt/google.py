@@ -162,7 +162,7 @@ class GoogleSTT(STT):
                 
                 # Mark span as error for Trace Error Rate
                 if span:
-                    span.set_tag("error", "true")
+                    span.error=1
                     span.set_tag("error.msg", str(e))
                 
                 # Send Error Metric for Monitor
