@@ -54,6 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11vnc \
     gnupg \
     curl \
+    sudo \
     && apt-get purge -y --auto-remove \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
@@ -67,12 +68,18 @@ RUN sh -c "echo 'deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg]
     && apt-get update && apt-get install -y datadog-agent \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
+# Create non-root user and configure sudo
 RUN groupadd --gid 1001 app && \
-    useradd --uid 1001 --gid 1001 -m app
+    useradd --uid 1001 --gid 1001 -m app && \
+    echo "app ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/app && \
+    chmod 0440 /etc/sudoers.d/app
 
 # Copy virtual environment from builder and set permissions
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+
+# Copy entrypoint script
+COPY --chown=app:app scripts/docker_entrypoint.sh /app/scripts/docker_entrypoint.sh
+RUN chmod +x /app/scripts/docker_entrypoint.sh
 
 # Set user and working directory
 USER app
@@ -87,4 +94,4 @@ RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.p
     --whisper-model base
 
 # Set entrypoint
-ENTRYPOINT ["/app/.venv/bin/gemini-meet"]
+ENTRYPOINT ["/app/scripts/docker_entrypoint.sh"]
