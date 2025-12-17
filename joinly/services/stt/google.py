@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import os
+import time
 import wave
 from collections import defaultdict
 from collections.abc import AsyncIterator
@@ -9,6 +10,9 @@ from typing import Self
 
 from google import genai
 from google.genai import types
+from ddtrace import tracer
+from datadog import statsd
+
 
 from joinly.core import STT
 from joinly.types import (
@@ -21,7 +25,10 @@ from joinly.utils.usage import add_usage
 
 logger = logging.getLogger(__name__)
 
-
+# tanscript_drift.json is used to create a Datadog monitor to track STT drift
+##
+####
+#####
 class GoogleSTT(STT):
     """Speech-to-Text (STT) service using Gemini audio understanding API."""
 
@@ -32,13 +39,6 @@ class GoogleSTT(STT):
         prompt: str = "Generate a transcript of the speech.",
         sample_rate: int = 16000,
     ) -> None:
-        """Initialize the Gemini STT service.
-
-        Args:
-            model_name: The Gemini model to use for audio understanding.
-            prompt: The prompt to send with the audio to request a transcript.
-            sample_rate: The sample rate of the audio (default is 16000).
-        """
         if os.getenv("GEMINI_API_KEY") is None and os.getenv("GOOGLE_API_KEY") is None:
             msg = "GEMINI_API_KEY or GOOGLE_API_KEY must be set in the environment."
             raise ValueError(msg)
@@ -47,42 +47,31 @@ class GoogleSTT(STT):
         self._prompt = prompt
         self._client: genai.Client | None = None
         self._lock = asyncio.Lock()
-
-        # Gemini downsamples audio to 16kHz for processing
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
 
     async def __aenter__(self) -> Self:
-        """Initialize the Gemini client."""
         api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self._client = genai.Client(api_key=api_key)
-
         logger.info("Initialized Gemini STT with model: %s", self._model)
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        """Clean up resources."""
         self._client = None
 
+    @tracer.wrap(service="joinly-stt", resource="google_stt_stream")
     async def stream(
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
-        """Transcribe audio stream using Gemini audio understanding.
-
-        Note: The Gemini audio understanding API is not a streaming API.
-        This method buffers the entire audio stream, then sends it for
-        transcription as a single request.
-
-        Args:
-            windows: An asynchronous iterator of audio windows to transcribe.
-
-        Yields:
-            TranscriptSegment: The transcribed segment(s).
-        """
+        """Transcribe audio stream using Gemini audio understanding."""
+        
+        span = tracer.current_span()
+        
         if self._client is None:
-            msg = "STT service is not initialized."
-            raise RuntimeError(msg)
+            raise RuntimeError("STT service is not initialized.")
 
-        # Buffer the entire audio stream
+        #start timing for drift calculation
+        process_start_time = time.time()
+        
         start_time: float | None = None
         end_time: float = 0.0
         audio_buffer = bytearray()
@@ -91,19 +80,16 @@ class GoogleSTT(STT):
         async for window in windows:
             if start_time is None:
                 start_time = window.time_ns / 1e9
-
             audio_buffer.extend(window.data)
-
             duration = calculate_audio_duration(len(window.data), self.audio_format)
             end_time = (window.time_ns / 1e9) + duration
             if window.speaker:
                 speakers[window.speaker] += duration
 
         if not audio_buffer:
-            logger.warning("Received no audio data to transcribe.")
             return
 
-        # Convert PCM to WAV format
+        # Prepare Audio
         wav_buffer = io.BytesIO()
         with wave.open(wav_buffer, "wb") as wf:
             wf.setnchannels(1)
@@ -113,32 +99,45 @@ class GoogleSTT(STT):
         wav_buffer.seek(0)
         audio_bytes = wav_buffer.getvalue()
 
-        # Send to Gemini API
         async with self._lock:
             audio_duration_secs = calculate_audio_duration(
                 len(audio_buffer), self.audio_format
             )
-            logger.debug(
-                "Sending %.2f seconds of audio to Gemini for transcription.",
-                audio_duration_secs,
-            )
-
+            
             try:
-                # Use inline audio data
                 response = await self._client.aio.models.generate_content(
                     model=self._model,
                     contents=[
                         self._prompt,
-                        types.Part.from_bytes(
-                            data=audio_bytes,
-                            mime_type="audio/wav",
-                        ),
+                        types.Part.from_bytes(data=audio_bytes, mime_type="audio/wav"),
                     ],
                 )
-
                 transcribed_text = (response.text or "").strip()
 
-                # Track usage
+                #drift calculation
+                process_end_time = time.time()
+                processing_duration = process_end_time - process_start_time
+                drift = processing_duration - audio_duration_secs
+                
+                # Send stats to Datadog
+                if span:
+                    span.set_tag("stt.provider", "google")
+                    span.set_tag("stt.model", self._model)
+                    span.set_metric("stt.audio_duration", audio_duration_secs)
+                    span.set_metric("stt.drift", drift)
+                    
+                    # Log snippet for Incident Context (last 10 chunks logic would hook here)
+                    if transcribed_text:
+                        span.set_tag("stt.transcript_snippet", transcribed_text[:200])
+
+                # Send explicit Metric for Monitor
+                # (Use try/except in case Agent is not running locally)
+                try:
+                    statsd.gauge("joinly.stt.drift", drift, tags=["stt:google"])
+                    statsd.increment("joinly.stt.transcription_success", tags=["stt:google"])
+                except Exception:
+                    pass
+
                 add_usage(
                     service="gemini_stt",
                     usage={"seconds": audio_duration_secs},
@@ -146,23 +145,30 @@ class GoogleSTT(STT):
                 )
 
                 if transcribed_text:
-                    # Determine the primary speaker
                     speaker = (
                         max(speakers.items(), key=lambda item: item[1])[0]
-                        if speakers
-                        else None
+                        if speakers else None
                     )
-
                     yield TranscriptSegment(
                         text=transcribed_text,
                         start=start_time or 0.0,
                         end=end_time,
                         speaker=speaker,
                     )
-                else:
-                    logger.info("Gemini returned an empty transcription.")
 
             except Exception as e:
+                # --- Error Handling & Metrics ---
                 logger.exception("Error during Gemini transcription")
-                msg = f"Failed to transcribe audio with Gemini: {e}"
-                raise RuntimeError(msg) from e
+                
+                # Mark span as error for Trace Error Rate
+                if span:
+                    span.set_tag("error", True)
+                    span.set_tag("error.msg", str(e))
+                
+                # Send Error Metric for Monitor
+                try:
+                    statsd.increment("joinly.stt.transcription_error", tags=["stt:google"])
+                except Exception:
+                    pass
+                    
+                raise RuntimeError(f"Failed to transcribe: {e}") from e
