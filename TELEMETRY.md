@@ -1,2 +1,12 @@
+BEFORE STARTING IMPORT THE JSON FILES from <a href="/datadog_json"> datadog json</a>
 
-Joinly's critical reliance on Whisper and Deepgram STT services may  result in total agent failure, the Transcript Drift / STT Failure Spike monitor continuously tracks the joinly.stt.transcription_error_rate metric and triggers a Datadog incident if the error rate exceeds 5% over a two-minute window. Tagged with stt:whisper or stt:deepgram, this alert automatically captures vital diagnostic context—including the last 10 transcript chunks, provider statistics, and drift analysis comparing audio duration to transcription time—to rapidly identify and resolve high-impact issues such as model overload, microphone capture failures, dropped audio frames, or API outages.
+# Transcript Drift / STT Failure Spike
+
+Joinly's critical reliance on Whisper and Deepgram STT services may  result in total agent failure, the Transcript Drift / STT Failure Spike monitor continuously tracks the joinly.stt.transcription_error_rate metric and triggers a Datadog incident if the error rate exceeds 5% over a two-minute window. Tagged with stt:whisper or stt:deepgram, this alert automatically captures vital diagnostic context,including the last 10 transcript chunks, provider statistics, and drift analysis comparing audio duration to transcription time,to rapidly identify and resolve high-impact issues such as model overload, microphone capture failures, dropped audio frames, or API outages.
+
+```json
+transcript_drift.json
+```
+
+Shto foto te transcript drift me error spike
+<img src=>

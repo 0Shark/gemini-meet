@@ -25,6 +25,9 @@ Built on top of the robust [Joinly](https://github.com/joinly-ai/joinly) framewo
 - [Docker](https://docs.docker.com/engine/install/)
 - Google Cloud Project with Vertex AI enabled (or OpenAI API Key)
 
+## Datadog Telemetry
+To see what is measured and what is required to setup on the web UI for Datadog. Please check [TELEMETRY.md](TELEMETRY.md).
+
 ## Setup
 
 1.  **Clone the repository:**
