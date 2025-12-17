@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import os
+import time
 import wave
 from collections import defaultdict
 from collections.abc import AsyncIterator
@@ -9,6 +10,8 @@ from typing import Self
 
 from google import genai
 from google.genai import types
+from ddtrace import tracer
+from datadog import statsd
 
 from gemini_meet.core import STT
 from gemini_meet.data_types import (
@@ -30,19 +33,10 @@ class GoogleVertexSTT(STT):
         *,
         project_id: str | None = None,
         location: str | None = None,
-        model_name: str = "gemini-2.0-flash",  # Vertex often gets newer models slightly later or with different version names
+        model_name: str = "gemini-2.0-flash",
         prompt: str = "Generate a transcript of the speech.",
         sample_rate: int = 16000,
     ) -> None:
-        """Initialize the Vertex AI STT service.
-
-        Args:
-            project_id: GCP Project ID. If None, reads from GOOGLE_CLOUD_PROJECT env var.
-            location: GCP Region (e.g., "us-central1"). If None, reads from GOOGLE_CLOUD_LOCATION env var.
-            model_name: The Gemini model to use (e.g., "gemini-1.5-flash-002").
-            prompt: The prompt to send with the audio.
-            sample_rate: The sample rate of the audio.
-        """
         self._project_id = project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
         self._location = location or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
@@ -55,19 +49,12 @@ class GoogleVertexSTT(STT):
         self._prompt = prompt
         self._client: genai.Client | None = None
         self._lock = asyncio.Lock()
-
-        # Gemini downsamples audio to 16kHz for processing
         self.audio_format = AudioFormat(sample_rate=sample_rate, byte_depth=2)
 
     async def __aenter__(self) -> Self:
-        """Initialize the Vertex AI client."""
-        # Initialize Client with vertexai=True
-        # This relies on 'gcloud auth application-default login' or
-        # GOOGLE_APPLICATION_CREDENTIALS environment variable for auth.
         self._client = genai.Client(
             vertexai=True, project=self._project_id, location=self._location
         )
-
         logger.info(
             "Initialized Vertex AI STT with model: %s in project: %s",
             self._model,
@@ -76,21 +63,25 @@ class GoogleVertexSTT(STT):
         return self
 
     async def __aexit__(self, *_exc: object) -> None:
-        """Clean up resources."""
         self._client = None
 
+    # 1. Wrap the method in a Datadog Span
+    @tracer.wrap(service="gemini_meet-stt", resource="vertex_stt_stream")
     async def stream(
         self, windows: AsyncIterator[SpeechWindow]
     ) -> AsyncIterator[TranscriptSegment]:
-        """Transcribe audio stream using Vertex AI.
+        """Transcribe audio stream using Vertex AI."""
+        
+        # Get the active span to add tags later
+        span = tracer.current_span()
 
-        Buffers stream and sends as a single request.
-        """
         if self._client is None:
-            msg = "STT service is not initialized."
-            raise RuntimeError(msg)
+            raise RuntimeError("STT service is not initialized.")
 
-        # Buffer the entire audio stream
+        #  Start Timing for Drift Calculation
+        # (Drift = Total Processing Time - Audio Duration)
+        process_start_time = time.time()
+
         start_time: float | None = None
         end_time: float = 0.0
         audio_buffer = bytearray()
@@ -101,7 +92,6 @@ class GoogleVertexSTT(STT):
                 start_time = window.time_ns / 1e9
 
             audio_buffer.extend(window.data)
-
             duration = calculate_audio_duration(len(window.data), self.audio_format)
             end_time = (window.time_ns / 1e9) + duration
             if window.speaker:
@@ -121,7 +111,6 @@ class GoogleVertexSTT(STT):
         wav_buffer.seek(0)
         audio_bytes = wav_buffer.getvalue()
 
-        # Send to Vertex AI
         async with self._lock:
             audio_duration_secs = calculate_audio_duration(
                 len(audio_buffer), self.audio_format
@@ -132,7 +121,6 @@ class GoogleVertexSTT(STT):
             )
 
             try:
-                # Vertex AI call is identical structure-wise using the new SDK
                 try:
                     from ddtrace.llmobs import LLMObs
                 except ImportError:
@@ -143,7 +131,7 @@ class GoogleVertexSTT(STT):
                         model_name=self._model,
                         model_provider="google",
                         name="transcribe_audio",
-                    ) as span:
+                    ) as llm_span:
                         LLMObs.annotate(
                             input_data=self._prompt,
                             metadata={"audio_duration": audio_duration_secs},
@@ -163,12 +151,8 @@ class GoogleVertexSTT(STT):
                             output_data=transcribed_text,
                             metrics={
                                 "audio_seconds": audio_duration_secs,
-                                "input_tokens": response.usage_metadata.prompt_token_count
-                                if response.usage_metadata
-                                else 0,
-                                "output_tokens": response.usage_metadata.candidates_token_count
-                                if response.usage_metadata
-                                else 0,
+                                "input_tokens": response.usage_metadata.prompt_token_count if response.usage_metadata else 0,
+                                "output_tokens": response.usage_metadata.candidates_token_count if response.usage_metadata else 0,
                             },
                         )
                 else:
@@ -184,7 +168,29 @@ class GoogleVertexSTT(STT):
                     )
                     transcribed_text = (response.text or "").strip()
 
-                # Track usage
+                #Drift Calculation & Success Metrics
+                process_end_time = time.time()
+                processing_duration = process_end_time - process_start_time
+                drift = processing_duration - audio_duration_secs
+
+                # Emit Metric: Drift (for Dashboard/Context)
+                statsd.gauge("gemini_meet.stt.drift", drift, tags=["stt:vertex"])
+
+                # Emit Metric: Success (for Error Rate Monitor)
+                statsd.increment("gemini_meet.stt.transcription_success", tags=["stt:vertex"])
+
+                # Update Span Context (for Incident details)
+                if span:
+                    span.set_tag("stt.provider", "google_vertex")
+                    span.set_tag("stt.model", self._model)
+                    span.set_metric("stt.drift", drift)
+                    span.set_metric("stt.audio_duration", audio_duration_secs)
+                    
+                    if transcribed_text:
+                        # Capture snippet for debugging (truncated)
+                        span.set_tag("stt.transcript_snippet", transcribed_text[:200])
+
+                # Track internal usage
                 add_usage(
                     service="vertex_stt",
                     usage={"seconds": audio_duration_secs},
@@ -212,5 +218,14 @@ class GoogleVertexSTT(STT):
 
             except Exception as e:
                 logger.exception("Error during Vertex AI transcription")
+                
+                # Emit Metric: Error (for Error Rate Monitor)
+                statsd.increment("gemini_meet.stt.transcription_error", tags=["stt:vertex"])
+
+                # Mark Span as Error (for Trace)
+                if span:
+                    span.error = 1
+                    span.set_tag("error.msg", str(e))
+                
                 msg = f"Failed to transcribe audio with Vertex AI: {e}"
                 raise RuntimeError(msg) from e

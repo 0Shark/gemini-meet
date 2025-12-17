@@ -42,9 +42,6 @@ Built on top of the robust [Joinly](https://github.com/joinly-ai/joinly) framewo
     GOOGLE_CLOUD_PROJECT=your-project-id
     GOOGLE_APPLICATION_CREDENTIALS=vertex_credentials.json
 
-    # Or OpenAI
-    # OPENAI_API_KEY=your-key
-
     # Datadog (Optional)
     DD_API_KEY=your-datadog-key
     DD_SITE=datadoghq.com

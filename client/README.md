@@ -5,16 +5,13 @@
 
 ### Set LLM API key
 
-Export a valid API key for the LLM provider you want to use, e.g. OpenAI:
+Create a `.env` file in the current directory with the following content:
+
 ```bash
-export OPENAI_API_KEY="sk-..."
+GOOGLE_CLOUD_PROJECT="your-project-id"
+GOOGLE_CLOUD_LOCATION="us-central1"
+GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
 ```
-
-Or, create a `.env` file in the current directory with the following content:
-```dotenv
-OPENAI_API_KEY="sk-..."
-```
-
 For other providers, export the corresponding environment variable(s) and set provider and model with the command:
 ```bash
 uvx gemini-meet-client --llm-provider <provider> --llm-model <model> <MeetingUrl>
