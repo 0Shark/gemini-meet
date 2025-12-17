@@ -11,3 +11,7 @@ docker-compose.yml
 node_modules
 pytest_cache
 .env
+vertex_credentials.json
+*.pem
+*.key
+dashboard/
