@@ -208,7 +208,7 @@ class DefaultSpeechController(SpeechController):
                 )
                 self._notify("segment")
                 prefetch_sem.release()
-                logger.debug(
+                logger.info(
                     'Spoken (%d/%d): "%s"',
                     chunk_idx + 1,
                     len(chunks),

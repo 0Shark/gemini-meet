@@ -2,7 +2,8 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator
-from typing import Self
+from typing import Any, Self
+
 
 from google import genai
 from google.genai import types
@@ -45,6 +46,7 @@ class GoogleTTS(TTS):
         voice_name: str | None = None,
         sample_rate: int = REQUIRED_SAMPLE_RATE,
         chunk_size_bytes: int = 4096,
+        **kwargs: Any,
     ) -> None:
         """Initialize the Gemini TTS service.
 
@@ -56,7 +58,11 @@ class GoogleTTS(TTS):
                 for all 30 available voices.
             sample_rate: The sample rate of the audio. Gemini TTS outputs at 24kHz.
             chunk_size_bytes: The size of audio chunks to yield in bytes.
+            **kwargs: Additional arguments (ignored).
         """
+        if kwargs:
+            logger.warning("Ignoring extra arguments for Google TTS: %s", kwargs)
+
         if os.getenv("GEMINI_MEET_MODEL_PROVIDER") == "google":
             # Using Vertex AI (Application Default Credentials)
             pass
