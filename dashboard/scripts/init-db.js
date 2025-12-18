@@ -1,50 +1,54 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  connectionString: 'postgres://user:password@localhost:5432/gemini_dashboard',
+  connectionString: process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/gemini_dashboard',
 });
 
 const schema = `
-  CREATE TABLE IF NOT EXISTS users (
+  -- Create tables (using "user" singular as required by better-auth default)
+  CREATE TABLE IF NOT EXISTS "user" (
     id TEXT PRIMARY KEY,
     name TEXT,
     email TEXT UNIQUE,
-    email_verified BOOLEAN,
+    "emailVerified" BOOLEAN,
     image TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
-  CREATE TABLE IF NOT EXISTS sessions (
+  CREATE TABLE IF NOT EXISTS session (
     id TEXT PRIMARY KEY,
-    expires_at TIMESTAMP,
-    ip_address TEXT,
-    user_agent TEXT,
-    user_id TEXT REFERENCES users(id)
+    "expiresAt" TIMESTAMP,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT REFERENCES "user"(id),
+    token TEXT UNIQUE,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
-  CREATE TABLE IF NOT EXISTS accounts (
+  CREATE TABLE IF NOT EXISTS account (
     id TEXT PRIMARY KEY,
-    account_id TEXT,
-    provider_id TEXT,
-    user_id TEXT REFERENCES users(id),
-    access_token TEXT,
-    refresh_token TEXT,
-    access_token_expires_at TIMESTAMP,
-    refresh_token_expires_at TIMESTAMP,
+    "accountId" TEXT,
+    "providerId" TEXT,
+    "userId" TEXT REFERENCES "user"(id),
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMP,
+    "refreshTokenExpiresAt" TIMESTAMP,
     scope TEXT,
     password TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
-  CREATE TABLE IF NOT EXISTS verifications (
+  CREATE TABLE IF NOT EXISTS verification (
     id TEXT PRIMARY KEY,
     identifier TEXT,
     value TEXT,
-    expires_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    "expiresAt" TIMESTAMP,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS meetings (
@@ -53,13 +57,32 @@ const schema = `
     status TEXT NOT NULL,
     container_id TEXT,
     config JSONB,
-    created_by TEXT REFERENCES users(id),
+    created_by TEXT REFERENCES "user"(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- MCP server configurations (user's configured MCP servers with their API keys)
+  CREATE TABLE IF NOT EXISTS mcp_configs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT REFERENCES "user"(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    command TEXT NOT NULL,
+    args JSONB DEFAULT '[]',
+    env JSONB DEFAULT '{}',
+    is_default BOOLEAN DEFAULT false,
+    enabled BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Create index for faster lookups
+  CREATE INDEX IF NOT EXISTS idx_mcp_configs_user_id ON mcp_configs(user_id);
 `;
 
 async function init() {
   try {
+    console.log('Initializing database...');
     await pool.query(schema);
     console.log('Database initialized successfully');
   } catch (err) {

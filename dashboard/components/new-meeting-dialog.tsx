@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,7 +13,20 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AVAILABLE_TOOLS } from '@/lib/tools';
+import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+interface McpConfig {
+  id: string;
+  name: string;
+  description: string | null;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  is_default: boolean;
+  enabled: boolean;
+}
 
 interface NewMeetingDialogProps {
   open: boolean;
@@ -25,6 +38,36 @@ export function NewMeetingDialog({ open, onOpenChange, onSuccess }: NewMeetingDi
   const [url, setUrl] = useState('');
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mcpConfigs, setMcpConfigs] = useState<McpConfig[]>([]);
+  const [configsLoading, setConfigsLoading] = useState(true);
+  const router = useRouter();
+
+  // Fetch MCP configs when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchConfigs();
+    }
+  }, [open]);
+
+  const fetchConfigs = async () => {
+    setConfigsLoading(true);
+    try {
+      const res = await fetch('/api/mcp-configs');
+      if (res.ok) {
+        const configs: McpConfig[] = await res.json();
+        setMcpConfigs(configs.filter(c => c.enabled));
+        // Pre-select default tools
+        const defaults = configs.filter(c => c.is_default && c.enabled).map(c => c.id);
+        setSelectedTools(defaults);
+      } else if (res.status === 401) {
+          router.push('/auth/login');
+      }
+    } catch (error) {
+      console.error('Failed to fetch MCP configs:', error);
+    } finally {
+      setConfigsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +77,7 @@ export function NewMeetingDialog({ open, onOpenChange, onSuccess }: NewMeetingDi
       const res = await fetch('/api/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, toolIds: selectedTools }),
+        body: JSON.stringify({ url, mcpConfigIds: selectedTools }),
       });
 
       if (res.ok) {
@@ -43,6 +86,10 @@ export function NewMeetingDialog({ open, onOpenChange, onSuccess }: NewMeetingDi
         onOpenChange(false);
         onSuccess();
       } else {
+        if (res.status === 401) {
+            router.push('/auth/login');
+            return;
+        }
         const err = await res.json();
         alert(err.error || 'Failed to start agent');
       }
@@ -58,6 +105,10 @@ export function NewMeetingDialog({ open, onOpenChange, onSuccess }: NewMeetingDi
     setSelectedTools((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
     );
+  };
+
+  const hasEmptyEnvVars = (env: Record<string, string>) => {
+    return Object.values(env).some(v => v === '');
   };
 
   return (
@@ -86,28 +137,55 @@ export function NewMeetingDialog({ open, onOpenChange, onSuccess }: NewMeetingDi
             </div>
             
             <div className="space-y-3">
-              <Label>Enable Tools (MCP)</Label>
+              <div className="flex items-center justify-between">
+                <Label>Enable Tools (MCP)</Label>
+                <Link href="/settings" className="text-xs text-muted-foreground hover:underline">
+                  Manage tools
+                </Link>
+              </div>
               <div className="border rounded-md p-4 space-y-3 max-h-[200px] overflow-y-auto">
-                {AVAILABLE_TOOLS.map((tool) => (
-                  <div key={tool.id} className="flex items-start space-x-2">
-                    <Checkbox 
-                      id={`tool-${tool.id}`} 
-                      checked={selectedTools.includes(tool.id)}
-                      onCheckedChange={() => toggleTool(tool.id)}
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label
-                        htmlFor={`tool-${tool.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        {tool.name}
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        {tool.description}
-                      </p>
+                {configsLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading tools...</p>
+                ) : mcpConfigs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No MCP tools configured.{' '}
+                    <Link href="/settings" className="text-primary hover:underline">
+                      Add some in settings
+                    </Link>
+                  </p>
+                ) : (
+                  mcpConfigs.map((config) => (
+                    <div key={config.id} className="flex items-start space-x-2">
+                      <Checkbox 
+                        id={`tool-${config.id}`} 
+                        checked={selectedTools.includes(config.id)}
+                        onCheckedChange={() => toggleTool(config.id)}
+                        disabled={hasEmptyEnvVars(config.env)}
+                      />
+                      <div className="grid gap-1.5 leading-none flex-1">
+                        <div className="flex items-center gap-2">
+                          <Label
+                            htmlFor={`tool-${config.id}`}
+                            className={`text-sm font-medium leading-none ${hasEmptyEnvVars(config.env) ? 'text-muted-foreground' : ''}`}
+                          >
+                            {config.name}
+                          </Label>
+                          {config.is_default && (
+                            <Badge variant="secondary" className="text-xs">Default</Badge>
+                          )}
+                          {hasEmptyEnvVars(config.env) && (
+                            <Badge variant="outline" className="text-xs text-orange-600">Needs API key</Badge>
+                          )}
+                        </div>
+                        {config.description && (
+                          <p className="text-xs text-muted-foreground">
+                            {config.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>

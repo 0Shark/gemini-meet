@@ -87,4 +87,4 @@ RUN --mount=type=bind,source=scripts/download_assets.py,target=download_assets.p
     --whisper-model base
 
 # Set entrypoint
-ENTRYPOINT ["/app/.venv/bin/gemini-meet"]
+ENTRYPOINT ["/app/.venv/bin/gemini_meet"]
