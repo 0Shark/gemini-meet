@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { db } from '@/lib/drizzle';
+import { mcpConfigs } from '@/db/schema';
+import { eq, asc } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 
@@ -15,11 +17,12 @@ export async function GET() {
     }
 
     const userId = session.user.id;
-    const result = await query(
-      'SELECT * FROM mcp_configs WHERE user_id = $1 ORDER BY name ASC',
-      [userId]
-    );
-    return NextResponse.json(result.rows);
+    const result = await db.select()
+      .from(mcpConfigs)
+      .where(eq(mcpConfigs.userId, userId))
+      .orderBy(asc(mcpConfigs.name));
+      
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: 'Failed to fetch MCP configs' }, { status: 500 });
@@ -45,23 +48,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Name and command are required' }, { status: 400 });
     }
 
-    const result = await query(
-      `INSERT INTO mcp_configs (user_id, name, description, command, args, env, is_default, enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [
-        userId,
-        name,
-        description || null,
-        command,
-        JSON.stringify(args || []),
-        JSON.stringify(env || {}),
-        is_default || false,
-        enabled !== false
-      ]
-    );
+    const result = await db.insert(mcpConfigs).values({
+      userId,
+      name,
+      description: description || null,
+      command,
+      args: args || [],
+      env: env || {},
+      isDefault: is_default || false,
+      enabled: enabled !== false,
+    }).returning();
 
-    return NextResponse.json(result.rows[0]);
+    return NextResponse.json(result[0]);
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: 'Failed to create MCP config' }, { status: 500 });

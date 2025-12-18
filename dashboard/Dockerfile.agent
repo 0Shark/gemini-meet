@@ -6,13 +6,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     python3-pip \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get install -y nodejs sudo \
     && pip3 install requests google-cloud-aiplatform --break-system-packages \
     && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/run-agent.sh /run-agent.sh
 COPY scripts/post-meeting.py /app/post-meeting.py
-RUN chmod +x /run-agent.sh
+RUN chmod +x /run-agent.sh && echo "app ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 USER app
 

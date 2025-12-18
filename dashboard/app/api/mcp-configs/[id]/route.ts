@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { db } from '@/lib/drizzle';
+import { mcpConfigs } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 // GET a single MCP config
 export async function GET(
@@ -8,17 +12,24 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const userId = 'user-1'; // TODO: Get from auth session
-    const result = await query(
-      'SELECT * FROM mcp_configs WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
+    const session = await auth.api.getSession({
+      headers: await headers()
+    });
 
-    if (result.rows.length === 0) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const result = await db.select()
+      .from(mcpConfigs)
+      .where(and(eq(mcpConfigs.id, id), eq(mcpConfigs.userId, userId)));
+
+    if (result.length === 0) {
       return NextResponse.json({ error: 'MCP config not found' }, { status: 404 });
     }
 
-    return NextResponse.json(result.rows[0]);
+    return NextResponse.json(result[0]);
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: 'Failed to fetch MCP config' }, { status: 500 });
@@ -32,40 +43,37 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const userId = 'user-1'; // TODO: Get from auth session
+    const session = await auth.api.getSession({
+      headers: await headers()
+    });
+
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
     const body = await req.json();
     const { name, description, command, args, env, is_default, enabled } = body;
 
-    const result = await query(
-      `UPDATE mcp_configs 
-       SET name = COALESCE($1, name),
-           description = COALESCE($2, description),
-           command = COALESCE($3, command),
-           args = COALESCE($4, args),
-           env = COALESCE($5, env),
-           is_default = COALESCE($6, is_default),
-           enabled = COALESCE($7, enabled),
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8 AND user_id = $9
-       RETURNING *`,
-      [
-        name || null,
-        description,
-        command || null,
-        args ? JSON.stringify(args) : null,
-        env ? JSON.stringify(env) : null,
-        is_default,
-        enabled,
-        id,
-        userId
-      ]
-    );
+    const result = await db.update(mcpConfigs)
+      .set({
+        name: name ?? undefined,
+        description: description ?? undefined,
+        command: command ?? undefined,
+        args: args ?? undefined,
+        env: env ?? undefined,
+        isDefault: is_default ?? undefined,
+        enabled: enabled ?? undefined,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(mcpConfigs.id, id), eq(mcpConfigs.userId, userId)))
+      .returning();
 
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return NextResponse.json({ error: 'MCP config not found' }, { status: 404 });
     }
 
-    return NextResponse.json(result.rows[0]);
+    return NextResponse.json(result[0]);
   } catch (error) {
     console.error('Database error:', error);
     return NextResponse.json({ error: 'Failed to update MCP config' }, { status: 500 });
@@ -79,13 +87,20 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const userId = 'user-1'; // TODO: Get from auth session
-    const result = await query(
-      'DELETE FROM mcp_configs WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, userId]
-    );
+    const session = await auth.api.getSession({
+      headers: await headers()
+    });
 
-    if (result.rows.length === 0) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const result = await db.delete(mcpConfigs)
+      .where(and(eq(mcpConfigs.id, id), eq(mcpConfigs.userId, userId)))
+      .returning({ id: mcpConfigs.id });
+
+    if (result.length === 0) {
       return NextResponse.json({ error: 'MCP config not found' }, { status: 404 });
     }
 
