@@ -29,7 +29,7 @@
         "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
     },
     "postCreateCommand": "uv sync --frozen && uv run scripts/download_assets.py",
-    "postStartCommand": "uv run pre-commit install",
+    "postStartCommand": "uv run pre-commit install && ./scripts/setup_datadog.sh",
     "remoteUser": "vscode",
     "runArgs": [
         "--gpus",

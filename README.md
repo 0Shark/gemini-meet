@@ -25,6 +25,9 @@ Built on top of the robust [Joinly](https://github.com/joinly-ai/joinly) framewo
 - [Docker](https://docs.docker.com/engine/install/)
 - Google Cloud Project with Vertex AI enabled (or OpenAI API Key)
 
+## Datadog Telemetry
+To see what is measured and what is required to setup on the web UI for Datadog. Please check [TELEMETRY.md](TELEMETRY.md).
+
 ## Setup
 
 1.  **Clone the repository:**
@@ -63,9 +66,29 @@ Built on top of the robust [Joinly](https://github.com/joinly-ai/joinly) framewo
     docker pull ghcr.io/gemini-meet/gemini-meet:latest
     ```
 
-    Launch your meeting in Zoom, Google Meet or Teams and let Gemini Meet join using the meeting link as `<MeetingURL>`.
+    Launch your meeting in Zoom, Google Meet or Teams.
+
+    **Using Vertex AI:**
+    When using Google Vertex AI, you need to mount your credentials file into the container and point the environment variable to it:
+
     ```bash
-    docker run --env-file .env ghcr.io/gemini-meet/gemini-meet:latest --client <MeetingURL>
+    docker run \
+      --env-file .env \
+      -v "$(pwd)/vertex_credentials.json:/app/vertex_credentials.json" \
+      -e GOOGLE_APPLICATION_CREDENTIALS=/app/vertex_credentials.json \
+      ghcr.io/gemini-meet/gemini-meet:latest --client <MeetingURL>
+    ```
+
+    **With Datadog Monitoring:**
+    To enable Datadog Agent monitoring, pass your API key and site:
+
+    ```bash
+    docker run \
+      --env-file .env \
+      -e DD_API_KEY=your_datadog_key \
+      -e DD_SITE=datadoghq.eu \
+      -e DD_HOSTNAME=gemini-meet-prod-1 \
+      ghcr.io/gemini-meet/gemini-meet:latest --client <MeetingURL>
     ```
 
 # Run an external client
