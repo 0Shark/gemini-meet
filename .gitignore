@@ -183,4 +183,7 @@ artifacts/
 vertex_credentials.json
 
 config_meet.json
+
+# NextJS
+.next/
 notes

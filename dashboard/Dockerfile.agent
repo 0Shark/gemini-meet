@@ -1,0 +1,19 @@
+FROM ghcr.io/gemini-meet:latest
+
+# Install Node.js, npm, python requests library
+USER root
+RUN apt-get update && apt-get install -y \
+    curl \
+    python3-pip \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && pip3 install requests google-cloud-aiplatform --break-system-packages \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/run-agent.sh /run-agent.sh
+COPY scripts/post-meeting.py /app/post-meeting.py
+RUN chmod +x /run-agent.sh
+
+USER app
+
+ENTRYPOINT ["/run-agent.sh"]
