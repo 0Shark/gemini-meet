@@ -47,8 +47,12 @@ export async function GET() {
       if (!isRunning) {
         // Determine final status
         let status = 'stopped';
-        if (exitCode === 0) status = 'completed';
-        else status = 'failed';
+        // Exit codes 137 (SIGKILL) and 143 (SIGTERM) are typical when stopping a container manually
+        if (exitCode === 0 || exitCode === 137 || exitCode === 143) {
+            status = 'completed';
+        } else {
+            status = 'failed';
+        }
         
         console.log(`Meeting ${meeting.id} finished with status ${status} (ExitCode: ${exitCode})`);
         
@@ -203,6 +207,9 @@ export async function POST(req: Request) {
         `DD_API_KEY=${process.env.DD_API_KEY || ''}`,
         `DD_SITE=${process.env.DD_SITE || 'datadoghq.com'}`,
         `DD_ENV=${process.env.DD_ENV || 'production'}`,
+        // Enable Datadog logs collection with meeting_id tag
+        `DD_LOGS_ENABLED=true`,
+        `DD_LOGS_INJECTION=true`,
         // Pass Google Credentials path if set, so vertexai init works
         `GOOGLE_APPLICATION_CREDENTIALS=/app/vertex_credentials.json` 
       ],

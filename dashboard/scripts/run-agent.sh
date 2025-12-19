@@ -20,10 +20,11 @@ if [ -n "$DD_API_KEY" ]; then
 api_key: $DD_API_KEY
 site: $DD_SITE
 hostname: $DD_HOSTNAME
-logs_enabled: true
+tags:
+  - meeting_id:$MEETING_ID
 process_config:
   process_collection:
-    enabled: true
+    enabled: false
 dogstatsd_non_local_traffic: true
 apm_config:
   enabled: true
@@ -38,9 +39,6 @@ EOF"
     sudo service datadog-agent start || echo "Warning: Failed to start Datadog Agent"
 fi
 
-# Create output file
-touch /app/data/transcript.log
-
 # Function to run summary on exit
 cleanup() {
     echo "Meeting finished (or interrupted). Running post-meeting summary..."
@@ -50,7 +48,6 @@ cleanup() {
 # Trap exit signals to ensure cleanup runs
 trap cleanup EXIT
 
-# Run the command passed as arguments, piping output to the log file
-# We use 'tee' to show output in docker logs AND save to file
-"$@" 2>&1 | tee /app/data/transcript.log
+# Run the command passed as arguments
+"$@"
 
