@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LogViewer } from './log-viewer';
 
 interface Meeting {
   id: string;
@@ -486,15 +487,17 @@ export function MeetingDashboard() {
       </Dialog>
       {/* Logs Dialog */}
       <Dialog open={!!logViewerMeeting} onOpenChange={(open) => { if (!open) setLogViewerMeeting(null); }}>
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Live Logs</DialogTitle>
-            <DialogDescription>
-              {logViewerMeeting && `${new Date(logViewerMeeting.created_at).toLocaleString()} - ${logViewerMeeting.url}`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 bg-black text-green-400 p-4 rounded-md font-mono text-xs overflow-auto whitespace-pre-wrap">
-            {liveLogs}
+        <DialogContent className="max-w-6xl h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <div className="p-6 pb-2">
+              <DialogHeader>
+                <DialogTitle>Live Logs</DialogTitle>
+                <DialogDescription>
+                  {logViewerMeeting && `${new Date(logViewerMeeting.created_at).toLocaleString()} - ${logViewerMeeting.url}`}
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          <div className="flex-1 p-6 pt-2 overflow-hidden min-h-0">
+            <LogViewer logs={liveLogs} />
           </div>
         </DialogContent>
       </Dialog>
