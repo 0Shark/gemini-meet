@@ -454,6 +454,18 @@ wheels = [
 ]
 
 [[package]]
+name = "datadog"
+version = "0.52.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/e6/ec5e4b4dbecd63cecae94009ef6dde9ab421d7d0022e6027586cc3776921/datadog-0.52.1.tar.gz", hash = "sha256:44c6deb563c4522dba206fba2e2bb93d3b04113c40191851ba3a241d82b5fd0b", size = 368037, upload-time = "2025-07-31T15:49:43.425Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/19/e0e39f10169ca3e37fa6b5be2f6d1c729c92d677f1bd21ad6d448df8bec8/datadog-0.52.1-py2.py3-none-any.whl", hash = "sha256:b8c92cd761618ee062f114171067e4c400d48c9f0dad16cb285042439d9d5d4e", size = 129952, upload-time = "2025-07-31T15:49:41.8Z" },
+]
+
+[[package]]
 name = "ddtrace"
 version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -784,6 +796,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "click" },
+    { name = "datadog" },
     { name = "ddtrace" },
     { name = "deepgram-sdk" },
     { name = "elevenlabs" },
@@ -823,6 +836,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.11.18" },
     { name = "click", specifier = ">=8.1.8" },
+    { name = "datadog", specifier = ">=0.49.0" },
     { name = "ddtrace", specifier = ">=2.0.0" },
     { name = "deepgram-sdk", specifier = ">=4.1.1" },
     { name = "elevenlabs", specifier = ">=2.5.0" },

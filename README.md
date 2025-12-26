@@ -60,6 +60,10 @@ To see what is measured and what is required to setup on the web UI for Datadog.
     > [!NOTE]
     > See [.env.example](.env.example) for complete configuration options.
 
+    > [!TIP]
+    > **Dashboard Available**: We provide a comprehensive dashboard to manage your agents, view transcripts, and configure MCP servers.
+    > See the [Dashboard README](dashboard/README.md) for setup instructions.
+
 3.  **Run with Docker:**
     Pull the Docker image (or build it locally):
     ```bash
