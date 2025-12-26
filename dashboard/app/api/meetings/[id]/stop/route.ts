@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { docker } from '@/lib/docker';
-import { query } from '@/lib/db';
+import { db } from '@/lib/drizzle';
+import { meetings } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 
@@ -19,19 +21,24 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const userId = session.user.id;
 
     // Check meeting existence and ownership
-    const result = await query('SELECT container_id, created_by FROM meetings WHERE id = $1', [id]);
+    const result = await db.select({ 
+        containerId: meetings.containerId, 
+        createdBy: meetings.createdBy 
+      })
+      .from(meetings)
+      .where(eq(meetings.id, id));
     
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
     }
 
-    const meeting = result.rows[0];
+    const meeting = result[0];
 
-    if (meeting.created_by !== userId) {
+    if (meeting.createdBy !== userId) {
          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const containerId = meeting.container_id;
+    const containerId = meeting.containerId;
     if (containerId) {
       try {
         const container = docker.getContainer(containerId);
@@ -42,7 +49,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
-    await query("UPDATE meetings SET status = 'stopped' WHERE id = $1", [id]);
+    await db.update(meetings)
+      .set({ status: 'stopped', endedAt: new Date() })
+      .where(eq(meetings.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -22,6 +22,7 @@ from gemini_meet.data_types import (
     TranscriptSegment,
 )
 from gemini_meet.utils.audio import calculate_audio_duration
+from gemini_meet.utils.datadog import report_stt_metric
 from gemini_meet.utils.logging import LOGGING_TRACE
 from gemini_meet.utils.usage import add_usage
 
@@ -100,6 +101,7 @@ class DeepgramSTT(STT):
             int(self._padding_silence_dur * self.audio_format.sample_rate)
             * self.audio_format.byte_depth
         )
+        self._drift_balance: float = 0.0
 
     async def __aenter__(self) -> Self:
         """Enter the context."""
@@ -108,6 +110,7 @@ class DeepgramSTT(STT):
             raise RuntimeError(msg)
 
         self._sent_seconds = 0.0
+        self._drift_balance = 0.0
         self._queue = asyncio.Queue[TranscriptSegment | None]()
 
         async def on_result(
@@ -120,6 +123,11 @@ class DeepgramSTT(STT):
             if result.channel.alternatives:
                 transcript = result.channel.alternatives[0].transcript
                 if transcript:
+                    seg_dur = result.duration
+                    self._drift_balance = max(0.0, self._drift_balance - seg_dur)
+                    report_stt_metric("deepgram", "transcription_duration", seg_dur)
+                    report_stt_metric("deepgram", "drift", self._drift_balance)
+
                     segment = TranscriptSegment(
                         text=transcript,
                         start=result.start - self._sent_seconds,
@@ -141,8 +149,10 @@ class DeepgramSTT(STT):
         if not await self._client.is_connected():
             msg = "Failed to connect to Deepgram STT service."
             logger.error(msg)
+            report_stt_metric("deepgram", "error", tags={"error_type": "connection"})
             raise RuntimeError(msg)
         logger.debug("Connected to Deepgram STT service")
+        report_stt_metric("deepgram", "request", tags={"status": "connected"})
 
         return self
 
@@ -206,6 +216,9 @@ class DeepgramSTT(STT):
                 if window.is_speech:
                     silence_dur = 0.0
                     speech_dur += dur
+                    self._drift_balance += dur
+                    report_stt_metric("deepgram", "audio_duration", dur)
+                    report_stt_metric("deepgram", "drift", self._drift_balance)
                 else:
                     silence_dur += dur
                     if (

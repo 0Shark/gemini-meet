@@ -14,18 +14,20 @@ T = TypeVar("T")
 
 
 def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
-    """Turn direct type, dotted path, or short token into a class object.
-
-    Discovers paths by convention:
-    - if `spec` is a type, return it directly.
-    - if `spec` is a dotted path, import the module and return the class.
-    - if `spec` is a short token, map to
-        `<base>.<token_lowercase>.<token_camelcase><suffix>`.
-    """
+    """Turn direct type, dotted path, or short token into a class object."""
     if isinstance(spec, type):
         return spec
 
-    if "." in spec:
+    # Special handling for "google" to map to GoogleSTT/GoogleTTS
+    # This overrides the default "Google" + "STT" = "GoogleSTT" convention check
+    # if the class name doesn't match the folder name exactly
+    if spec == "google" and suffix == "STT":
+        mod = "gemini_meet.services.stt.google"
+        cls = "GoogleSTT"
+    elif spec == "google" and suffix == "TTS":
+        mod = "gemini_meet.services.tts.google"
+        cls = "GoogleTTS"
+    elif "." in spec:
         # fully qualified
         mod, _, cls = spec.rpartition(".")
     else:
@@ -47,6 +49,12 @@ def _resolve(spec: str | type[T], *, base: str, suffix: str) -> type[T]:
                 f"Missing dependency '{e.name}' when importing module '{mod}'. "
                 "You may need to install optional dependencies for this component."
             )
+        raise ImportError(msg) from e
+    except Exception as e:
+        msg = (
+            f"Failed to import module '{mod}': {e}. "
+            "Check that all required dependencies are installed."
+        )
         raise ImportError(msg) from e
 
     try:

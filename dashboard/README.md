@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gemini Meet Dashboard
+
+The dashboard for managing your autonomous Gemini Meet agents.
+
+## Features
+
+- **Agent Management**: Start, stop, and monitor meeting agents.
+- **MCP Library**: Install and configure Model Context Protocol (MCP) servers to give your agents capabilities (GitHub, Slack, Google Drive, etc.).
+- **Meeting Summaries**: View summaries and transcripts of completed meetings.
+- **Authentication**: Secure login with Email/Password and Google OAuth.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL database
+- Docker (for running meeting agents)
+- Google OAuth credentials (optional, for Google Sign-In)
+
+### Docker Setup
+
+The dashboard spawns meeting agents in Docker containers. You need to build the agent Docker image first:
+
+```bash
+# 1. Build the base gemini-meet image (from project root)
+docker build -f docker/Dockerfile -t ghcr.io/gemini-meet:latest .
+
+# 2. Build the agent image (from dashboard directory)
+cd dashboard
+docker build -f Dockerfile.agent -t gemini-meet-with-node:latest .
+```
+
+> **Note:** The agent image must be built from the `dashboard/` directory because it needs access to files in `dashboard/scripts/`.
+
+### Environment Setup
+
+Copy `.env.example` to `.env.local`:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in the required environment variables:
+
+- `DATABASE_URL`: Connection string for your PostgreSQL database
+- `BETTER_AUTH_SECRET`: A random string for session security
+- `BETTER_AUTH_URL`: The URL of your dashboard (e.g., http://localhost:3000)
+- `GOOGLE_CLIENT_ID`: (Optional) Google OAuth Client ID
+- `GOOGLE_CLIENT_SECRET`: (Optional) Google OAuth Client Secret
+
+### Installation
+
+```bash
+npm install
+```
+
+### Database Initialization
+
+Initialize the database schema:
+
+```bash
+npm run init-db
+```
+
+### Running the Dashboard
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `app/`: Next.js App Router pages and API routes
+- `components/`: React components (UI, dashboard, dialogs)
+- `lib/`: Utility functions, database connection, auth configuration
+- `scripts/`: Helper scripts (DB initialization, agent runner, post-meeting summary)
 
-## Learn More
+## Agent Configuration
 
-To learn more about Next.js, take a look at the following resources:
+When spawning a meeting agent, you can configure:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **STT Provider**: `whisper` (local), `google` (Gemini), or `deepgram`
+- **TTS Provider**: `kokoro` (local), `google` (Gemini), `elevenlabs`, or `deepgram`
+- **Language**: Language code for transcription and speech (e.g., `en`, `de`, `es`)
+- **MCP Servers**: Additional tools from configured MCP servers
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Technologies
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Next.js 15
+- Tailwind CSS & Shadcn UI
+- Framer Motion
+- Better Auth
+- PostgreSQL

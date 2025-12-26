@@ -1,0 +1,19 @@
+{
+	"id": 96437156,
+	"name": "High STT Error Rate Detected [Whisper]",
+	"type": "query alert",
+	"query": "sum(last_5m):sum:gemini_meet.stt.error{stt:whisper}.as_count() / sum:gemini_meet.stt.request{stt:whisper}.as_count() > 0.05",
+	"message": "The current whisper model is experiencing a high error rate.",
+	"tags": [],
+	"options": {
+		"thresholds": {
+			"critical": 0.05
+		},
+		"notify_audit": false,
+		"on_missing_data": "default",
+		"include_tags": false,
+		"new_host_delay": 300
+	},
+	"priority": null,
+	"draft_status": "published"
+}

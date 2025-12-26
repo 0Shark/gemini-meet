@@ -1,12 +1,51 @@
-BEFORE STARTING IMPORT THE JSON FILES from <a href="/datadog_json"> datadog json</a>
+# Telemetry & Observability
 
-# Transcript Drift / STT Failure Spike
+Gemini Meet integrates with **Datadog** to provide comprehensive observability into your agents' performance, stability, and usage.
 
-Joinly's critical reliance on Whisper and Deepgram STT services may  result in total agent failure, the Transcript Drift / STT Failure Spike monitor continuously tracks the joinly.stt.transcription_error_rate metric and triggers a Datadog incident if the error rate exceeds 5% over a two-minute window. Tagged with stt:whisper or stt:deepgram, this alert automatically captures vital diagnostic context,including the last 10 transcript chunks, provider statistics, and drift analysis comparing audio duration to transcription time,to rapidly identify and resolve high-impact issues such as model overload, microphone capture failures, dropped audio frames, or API outages.
+## Setup
 
-```json
-transcript_drift.json
+To enable Datadog telemetry, set the following environment variables:
+
+```bash
+DD_API_KEY=your_datadog_api_key
+DD_SITE=datadoghq.com  # or datadoghq.eu, etc.
+DD_SERVICE=gemini-meet
+DD_ENV=production
 ```
 
-Shto foto te transcript drift me error spike
-<img src=>
+## Metrics
+
+We track custom metrics to monitor critical components like Speech-to-Text (STT).
+
+### STT Performance (Speech-to-Text)
+
+Monitor the health and latency of transcription services (Whisper, Deepgram, Google).
+
+| Metric Name | Type | Description | Tags |
+| :--- | :--- | :--- | :--- |
+| `gemini_meet.stt.error` | Count | Number of failed transcription attempts or service errors. | `stt:{provider}`, `error_type:{type}` |
+| `gemini_meet.stt.request` | Count | Number of transcription requests initiated. | `stt:{provider}`, `status:{status}` |
+| `gemini_meet.stt.drift` | Histogram | The lag (in seconds) between audio duration and transcription processing time. High drift indicates the agent is falling behind. | `stt:{provider}` |
+| `gemini_meet.stt.audio_duration` | Histogram | Duration of the audio chunk being processed (in seconds). | `stt:{provider}` |
+| `gemini_meet.stt.transcription_duration` | Histogram | Time taken to generate the transcript or duration of the transcript produced. | `stt:{provider}` |
+
+#### Useful Monitors
+
+**1. High Transcription Error Rate**
+Alert if the error rate exceeds 5% over a 2-minute window.
+*   **Query**: `sum:gemini_meet.stt.error{*}.as_count() / sum:gemini_meet.stt.request{*}.as_count() > 0.05`
+
+**2. STT Drift / Lag Spike**
+Alert if the system is falling behind real-time (drift > 2s).
+*   **Query**: `avg:gemini_meet.stt.drift{*} > 2`
+
+## Logs
+
+Gemini Meet emits structured logs compatible with Datadog's log management. Ensure `DD_LOGS_INJECTION=true` is set to correlate logs with traces.
+
+## Traces (APM)
+
+APM tracing is supported for detailed performance analysis of:
+*   **LLM calls**: Vertex AI, OpenAI (trace latency and token usage)
+*   **Tool execution**: MCP tools, Browser interactions
+*   **Internal processing**: Main loop, Event handling

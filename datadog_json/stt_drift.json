@@ -1,0 +1,20 @@
+{
+	"id": 96437259,
+	"name": "High Transcription Drift detected [Whisper]",
+	"type": "query alert",
+	"query": "avg(last_5m):avg:gemini_meet.stt.drift{*} > 2",
+	"message": "The current whisper model is experiencing high transcription drift.",
+	"tags": [],
+	"options": {
+		"thresholds": {
+			"critical": 2
+		},
+		"notify_audit": false,
+		"on_missing_data": "default",
+		"include_tags": false,
+		"require_full_window": false,
+		"new_host_delay": 300
+	},
+	"priority": null,
+	"draft_status": "published"
+}

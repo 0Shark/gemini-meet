@@ -60,10 +60,20 @@ To see what is measured and what is required to setup on the web UI for Datadog.
     > [!NOTE]
     > See [.env.example](.env.example) for complete configuration options.
 
+    > [!TIP]
+    > **Dashboard Available**: We provide a comprehensive dashboard to manage your agents, view transcripts, and configure MCP servers.
+    > See the [Dashboard README](dashboard/README.md) for setup instructions.
+
 3.  **Run with Docker:**
-    Pull the Docker image (or build it locally `docker build -t gemini-meet .`):
+    Pull the Docker image (or build it locally):
     ```bash
     docker pull ghcr.io/gemini-meet/gemini-meet:latest
+    ```
+
+    **Building from source:**
+    ```bash
+    # Build the base image
+    docker build -f docker/Dockerfile -t ghcr.io/gemini-meet:latest .
     ```
 
     Launch your meeting in Zoom, Google Meet or Teams.
@@ -178,6 +188,10 @@ uv run client/gemini_meet_client/main.py <MyOptionArgs> <MeetingUrl>
 --tts kokoro
 --tts-arg voice=<VoiceName>
 
+# Google TTS (Gemini), requires GEMINI_API_KEY or Vertex AI credentials
+--tts google
+--tts-arg voice_name=Zephyr
+
 # ElevenLabs TTS, include ELEVENLABS_API_KEY in .env
 --tts elevenlabs
 --tts-arg voice_id=<VoiceID>
@@ -192,6 +206,10 @@ uv run client/gemini_meet_client/main.py <MyOptionArgs> <MeetingUrl>
 # Whisper (local) STT (default)
 --stt whisper
 --stt-arg model_name=<ModelName>
+
+# Google STT (Gemini), requires GEMINI_API_KEY or Vertex AI credentials
+--stt google
+--stt-arg model_name=gemini-2.5-flash
 
 # Deepgram STT, include DEEPGRAM_API_KEY in .env
 --stt deepgram

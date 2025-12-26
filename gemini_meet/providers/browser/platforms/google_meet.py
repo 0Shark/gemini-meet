@@ -86,22 +86,20 @@ class GoogleMeetBrowserPlatformController(BaseBrowserPlatformController):
             page: The Playwright page instance.
             message: The message to send.
         """
-        if len(message) > _MAX_MESSAGE_LENGTH:
-            msg = (
-                f"Message exceeds the maximum length of {_MAX_MESSAGE_LENGTH} "
-                f"characters, got {len(message)}."
-            )
-            raise ValueError(msg)
-
         await self._open_chat(page)
 
         chat_input = page.locator("textarea[placeholder*='Send a message']")
         if not await chat_input.is_visible():
             msg = "Chat input not found or not visible."
             raise RuntimeError(msg)
-        await chat_input.fill(message)
-        await page.wait_for_timeout(500)
-        await page.keyboard.press("Enter")
+
+        # Split message into chunks if it exceeds the limit
+        for i in range(0, len(message), _MAX_MESSAGE_LENGTH):
+            chunk = message[i : i + _MAX_MESSAGE_LENGTH]
+            await chat_input.fill(chunk)
+            await page.wait_for_timeout(200)
+            await page.keyboard.press("Enter")
+            await page.wait_for_timeout(200)
 
     async def get_chat_history(self, page: Page) -> MeetingChatHistory:
         """Get the chat history from a Google Meet meeting."""

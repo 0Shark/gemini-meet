@@ -58,7 +58,8 @@ const schema = `
     container_id TEXT,
     config JSONB,
     created_by TEXT REFERENCES "user"(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP
   );
 
   -- MCP server configurations (user's configured MCP servers with their API keys)

@@ -16,6 +16,7 @@ from gemini_meet.data_types import (
     TranscriptSegment,
 )
 from gemini_meet.utils.audio import calculate_audio_duration
+from gemini_meet.utils.datadog import report_stt_metric
 
 logger = logging.getLogger(__name__)
 
@@ -189,25 +190,37 @@ class WhisperSTT(STT):
         """
         if self._model is None:
             msg = "Model not initialized"
+            report_stt_metric("whisper", "error", tags={"error_type": "initialization"})
             raise RuntimeError(msg)
 
         async with self._sem:
+            audio_duration = calculate_audio_duration(len(data), self.audio_format)
             logger.debug(
                 "Processing audio chunk of size: %d (%.2fs)",
                 len(data),
-                calculate_audio_duration(len(data), self.audio_format),
+                audio_duration,
             )
 
             audio_segment = np.frombuffer(data, dtype=np.float32)
-            segments, _ = await asyncio.to_thread(
-                self._model.transcribe,
-                audio_segment,
-                language=get_settings().language,
-                beam_size=5,
-                condition_on_previous_text=False,
-                hotwords=self._hotwords_str,
-            )
+            try:
+                segments, _ = await asyncio.to_thread(
+                    self._model.transcribe,
+                    audio_segment,
+                    language=get_settings().language,
+                    beam_size=5,
+                    condition_on_previous_text=False,
+                    hotwords=self._hotwords_str,
+                )
+            except Exception as e:
+                report_stt_metric(
+                    "whisper", "error", tags={"error_type": "transcription"}
+                )
+                logger.error("Whisper transcription failed: %s", e)
+                raise
 
+            report_stt_metric("whisper", "request", tags={"status": "success"})
+
+            transcript_duration = 0.0
             get_next_segment = partial(next, iter(segments), None)
             while True:
                 seg = await asyncio.to_thread(get_next_segment)
@@ -216,9 +229,15 @@ class WhisperSTT(STT):
 
                 text = seg.text.strip()
                 if text:
+                    seg_dur = seg.end - seg.start
+                    transcript_duration += seg_dur
                     yield TranscriptSegment(
                         text=text,
                         start=min(start + seg.start, end or float("inf")),
                         end=min(start + seg.end, end or float("inf")),
                         speaker=speaker,
                     )
+
+            report_stt_metric("whisper", "audio_duration", audio_duration)
+            report_stt_metric("whisper", "transcription_duration", transcript_duration)
+            report_stt_metric("whisper", "drift", audio_duration - transcript_duration)
