@@ -3,9 +3,9 @@ import contextlib
 import json
 import logging
 import re
+import time
 from dataclasses import replace
 from typing import Any, Self
-
 
 from pydantic_ai import BinaryContent
 from pydantic_ai.direct import model_request
@@ -25,6 +25,7 @@ from pydantic_ai.tools import ToolDefinition
 
 from gemini_meet_client.data_types import ToolExecutor, TranscriptSegment, Usage
 from gemini_meet_client.utils import get_prompt
+from gemini_meet_client.datadog import report_llm_metric
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +308,7 @@ class ConversationalToolAgent:
                 except Exception:
                     logger.debug("Failed to create LLMObs prompt context")
 
+            start_time = time.perf_counter()
             with dd_prompt_context:
                 response = await model_request(
                     self._llm,
@@ -331,10 +333,44 @@ class ConversationalToolAgent:
                         allow_text_output=self._llm.model_name.startswith("gpt-5"),
                     ),
                 )
+
+            # Calculate and report latency
+            latency = (time.perf_counter() - start_time) * 1000  # ms
+            provider_name = self._llm.system
+            if (
+                "google" in str(self._llm.system).lower()
+                or "gemini" in str(self._llm.system).lower()
+            ):
+                provider_name = "google"
+
+            report_llm_metric(
+                "latency",
+                latency,
+                tags={"model": self._llm.model_name, "provider": provider_name},
+            )
+
         except Exception as e:
             if llmobs_span:
                 self._annotate_llmobs(llmobs_span, llmobs_input, error=e)
                 llmobs_span_exited = True
+
+            # Report error metric
+            provider_name = self._llm.system
+            if (
+                "google" in str(self._llm.system).lower()
+                or "gemini" in str(self._llm.system).lower()
+            ):
+                provider_name = "google"
+
+            report_llm_metric(
+                "error",
+                1,
+                tags={
+                    "model": self._llm.model_name,
+                    "provider": provider_name,
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
         logger.debug(
@@ -347,11 +383,31 @@ class ConversationalToolAgent:
         if llmobs_span and not llmobs_span_exited:
             self._annotate_llmobs(llmobs_span, llmobs_input, response=response)
 
+        input_tokens = response.usage.request_tokens or 0
+        output_tokens = response.usage.response_tokens or 0
+
+        provider_name = self._llm.system
+        if (
+            "google" in str(self._llm.system).lower()
+            or "gemini" in str(self._llm.system).lower()
+        ):
+            provider_name = "google"
+
+        report_llm_metric(
+            "tokens",
+            input_tokens + output_tokens,
+            tags={
+                "model": self._llm.model_name,
+                "provider": provider_name,
+                "type": "total",
+            },
+        )
+
         self._usage.add(
             "llm",
             usage={
-                "input_tokens": response.usage.request_tokens or 0,
-                "output_tokens": response.usage.response_tokens or 0,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
             },
             meta={"model": self._llm.model_name, "provider": self._llm.system},
         )

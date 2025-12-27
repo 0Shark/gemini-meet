@@ -31,6 +31,7 @@ export async function GET() {
     for (const meeting of runningMeetings) {
       let isRunning = false;
       let exitCode = 0;
+      let finishedAt: Date | undefined;
       
       if (meeting.containerId) {
         try {
@@ -38,6 +39,10 @@ export async function GET() {
           const data = await container.inspect();
           isRunning = data.State.Running;
           exitCode = data.State.ExitCode;
+          if (data.State.FinishedAt && !data.State.Running) {
+             // Docker returns "0001-01-01T00:00:00Z" if never finished, but here we know it's not running
+             finishedAt = new Date(data.State.FinishedAt);
+          }
         } catch (e) {
           // Container likely gone (AutoRemove)
           isRunning = false;
@@ -56,8 +61,11 @@ export async function GET() {
         
         console.log(`Meeting ${meeting.id} finished with status ${status} (ExitCode: ${exitCode})`);
         
+        // Use container finished time if available, otherwise fallback to current time
+        const endedAt = finishedAt && finishedAt.getFullYear() > 1 ? finishedAt : new Date();
+
         await db.update(meetings)
-          .set({ status, endedAt: new Date() })
+          .set({ status, endedAt })
           .where(eq(meetings.id, meeting.id));
       }
     }

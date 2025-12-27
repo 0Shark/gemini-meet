@@ -1,0 +1,19 @@
+{
+	"id": 96481721,
+	"name": "LLM Response Latency Spike",
+	"type": "query alert",
+	"query": "avg(last_5m):avg:system.load.1{*} > 2000",
+	"message": "The 95th percentile latency for {{provider.name}} (Model: `{{model.name}}`) has exceeded the critical threshold of 2000ms.\n**Current P95 Latency:** {{value}} ms\n Context\n- **Model:** {{model.name}}\n- **Provider:** {{provider.name}}",
+	"tags": [],
+	"options": {
+		"thresholds": {
+			"critical": 2000
+		},
+		"notify_audit": false,
+		"on_missing_data": "default",
+		"include_tags": false,
+		"new_host_delay": 300
+	},
+	"priority": null,
+	"draft_status": "published"
+}

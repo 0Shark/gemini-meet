@@ -1,0 +1,19 @@
+{
+	"id": 96486612,
+	"name": "Browser Automation Failure",
+	"type": "query alert",
+	"query": "sum(last_5m):sum:gemini_meet.browser.action_error{*}.as_count() > 10",
+	"message": "Browser automation failed to do the following action:\n{{name}}",
+	"tags": [],
+	"options": {
+		"thresholds": {
+			"critical": 10
+		},
+		"notify_audit": false,
+		"on_missing_data": "default",
+		"include_tags": false,
+		"new_host_delay": 300
+	},
+	"priority": null,
+	"draft_status": "published"
+}
