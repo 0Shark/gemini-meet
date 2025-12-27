@@ -875,6 +875,7 @@ version = "0.1.18"
 source = { editable = "client" }
 dependencies = [
     { name = "click" },
+    { name = "datadog" },
     { name = "ddtrace" },
     { name = "fastmcp" },
     { name = "gemini-meet-common" },
@@ -887,6 +888,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
+    { name = "datadog", specifier = ">=0.52.1" },
     { name = "ddtrace", specifier = ">=2.0.0" },
     { name = "fastmcp", specifier = ">=2.10.5" },
     { name = "gemini-meet-common", editable = "common" },

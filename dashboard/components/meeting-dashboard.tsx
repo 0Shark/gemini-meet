@@ -37,8 +37,8 @@ interface Meeting {
   id: string;
   url: string;
   status: string;
-  created_at: string;
-  ended_at?: string;
+  createdAt: string;
+  endedAt?: string;
   summary?: string;
   transcript?: string;
   containerId?: string; // Add containerId if needed, but we fetch by ID
@@ -137,31 +137,23 @@ export function MeetingDashboard() {
   }, [logViewerMeeting]);
 
   // Fetch Transcript for Summary Dialog if missing
-  const [fetchedTranscript, setFetchedTranscript] = useState<string>('');
+  const [fetchedDetails, setFetchedDetails] = useState<{ transcript: any[], toolUsage: Record<string, number> } | null>(null);
   
   useEffect(() => {
       if (!selectedMeeting) {
-          setFetchedTranscript('');
+          setFetchedDetails(null);
           return;
       }
       
-      if (selectedMeeting.transcript) {
-          setFetchedTranscript(selectedMeeting.transcript);
-          return;
-      }
-
       const fetchTranscript = async () => {
-          setFetchedTranscript('Loading transcript from Datadog...');
           try {
               const res = await fetch(`/api/meetings/${selectedMeeting.id}/transcript`);
               if (res.ok) {
                   const data = await res.json();
-                  setFetchedTranscript(data.transcript || 'No transcript available.');
-              } else {
-                  setFetchedTranscript('Failed to load transcript.');
+                  setFetchedDetails(data);
               }
           } catch (e) {
-              setFetchedTranscript('Error loading transcript.');
+              console.error(e);
           }
       };
       
@@ -176,12 +168,13 @@ export function MeetingDashboard() {
     const total = meetings.length;
     
     const completedMeetings = meetings.filter(m => m.status === 'completed' || m.status === 'stopped');
-    const avgDuration = completedMeetings.length > 0 
-      ? Math.round(completedMeetings.reduce((acc, m) => {
-          const created = new Date(m.created_at);
-          const end = m.ended_at ? new Date(m.ended_at) : new Date();
+    const validCompletedMeetings = completedMeetings.filter(m => m.endedAt);
+    const avgDuration = validCompletedMeetings.length > 0 
+      ? Math.round(validCompletedMeetings.reduce((acc, m) => {
+          const created = new Date(m.createdAt);
+          const end = m.endedAt ? new Date(m.endedAt) : new Date();
           return acc + (end.getTime() - created.getTime()) / (1000 * 60);
-        }, 0) / completedMeetings.length)
+        }, 0) / validCompletedMeetings.length)
       : 0;
 
     return { running, completed, failed, total, avgDuration };
@@ -196,8 +189,8 @@ export function MeetingDashboard() {
     }
 
     filtered.sort((a, b) => {
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
       return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
 
@@ -373,9 +366,14 @@ export function MeetingDashboard() {
                             variant={
                                 meeting.status === 'running' ? 'default' : 
                                 meeting.status === 'failed' ? 'destructive' : 
+                                meeting.status === 'completed' ? 'success' :
                                 'secondary'
                             }
-                            className="capitalize"
+                            className={
+                                meeting.status === 'completed' 
+                                ? "bg-green-600 hover:bg-green-700 capitalize text-white" 
+                                : "capitalize"
+                            }
                           >
                             {meeting.status === 'running' && (
                               <span className="relative flex h-2 w-2 mr-1.5">
@@ -390,18 +388,16 @@ export function MeetingDashboard() {
                           {meeting.url}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
-                          {new Date(meeting.created_at).toLocaleString()}
+                          {new Date(meeting.createdAt).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="sm" onClick={() => setLogViewerMeeting(meeting)} className="gap-1.5 h-8">
                                 <Terminal className="h-3.5 w-3.5" /> Logs
                             </Button>
-                            {meeting.summary && (
-                              <Button variant="outline" size="sm" onClick={() => setSelectedMeeting(meeting)} className="gap-1.5 h-8">
-                                <FileText className="h-3.5 w-3.5" /> Summary
-                              </Button>
-                            )}
+                            <Button variant="outline" size="sm" onClick={() => setSelectedMeeting(meeting)} className="gap-1.5 h-8">
+                              <FileText className="h-3.5 w-3.5" /> Meeting Details
+                            </Button>
                             {meeting.status === 'running' && (
                               <Button variant="destructive" size="sm" onClick={() => handleStop(meeting.id)} className="gap-1.5 h-8">
                                 <StopCircle className="h-3.5 w-3.5" /> Stop
@@ -462,23 +458,81 @@ export function MeetingDashboard() {
       <Dialog open={!!selectedMeeting} onOpenChange={(open) => { if (!open) setSelectedMeeting(null); }}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Meeting Summary</DialogTitle>
+            <DialogTitle>Meeting Details</DialogTitle>
             <DialogDescription>
-              {selectedMeeting && `${new Date(selectedMeeting.created_at).toLocaleString()} - ${selectedMeeting.url}`}
+              {selectedMeeting && `${new Date(selectedMeeting.createdAt).toLocaleString()} - ${selectedMeeting.url}`}
             </DialogDescription>
           </DialogHeader>
           {selectedMeeting && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">Summary</h3>
-                <div className="bg-muted p-4 rounded-md text-sm whitespace-pre-wrap leading-relaxed">
-                  {selectedMeeting.summary || "No summary generated."}
+            <div className="space-y-6">
+              {/* Summary Section */}
+              {selectedMeeting.summary && (
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" /> Summary
+                  </h3>
+                  <div className="bg-muted/50 border p-4 rounded-lg text-sm whitespace-pre-wrap leading-relaxed shadow-sm">
+                    {selectedMeeting.summary}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Tool Stats Section */}
+              {fetchedDetails?.toolUsage && Object.keys(fetchedDetails.toolUsage).length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Activity className="h-4 w-4" /> Tool Usage
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Object.entries(fetchedDetails.toolUsage).map(([tool, count]) => (
+                      <div key={tool} className="flex items-center justify-between bg-muted/50 border px-3 py-2 rounded-md text-sm">
+                        <span className="truncate font-mono text-xs" title={tool}>
+                          {tool.replace('gemini_meet_', '')}
+                        </span>
+                        <Badge variant="secondary" className="ml-2 font-mono">{count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Transcript Section */}
               <div>
-                <h3 className="font-semibold mb-2">Transcript / Logs</h3>
-                <div className="bg-muted p-4 rounded-md text-xs font-mono whitespace-pre-wrap h-64 overflow-y-auto">
-                  {fetchedTranscript}
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <Terminal className="h-4 w-4" /> Transcript
+                </h3>
+                <div className="bg-background border rounded-lg h-96 overflow-y-auto p-4 space-y-4 shadow-inner">
+                  {!fetchedDetails ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      Loading transcript data...
+                    </div>
+                  ) : fetchedDetails.transcript.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      No transcript entries found.
+                    </div>
+                  ) : (
+                    fetchedDetails.transcript.map((item, idx) => (
+                      <div key={idx} className={`flex flex-col gap-1 ${item.type === 'agent' ? 'items-end' : 'items-start'}`}>
+                        <div className={`flex items-center gap-2 mb-1 ${item.type === 'agent' ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${item.type === 'agent' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                            {item.speaker}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{item.timestamp}</span>
+                        </div>
+                        <div 
+                          className={`
+                            px-4 py-3 rounded-2xl text-sm max-w-[85%] shadow-sm leading-relaxed
+                            ${item.type === 'agent' 
+                              ? 'bg-blue-600 text-white rounded-tr-none' 
+                              : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                            }
+                          `}
+                        >
+                          {item.message}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -492,7 +546,7 @@ export function MeetingDashboard() {
               <DialogHeader>
                 <DialogTitle>Live Logs</DialogTitle>
                 <DialogDescription>
-                  {logViewerMeeting && `${new Date(logViewerMeeting.created_at).toLocaleString()} - ${logViewerMeeting.url}`}
+                  {logViewerMeeting && `${new Date(logViewerMeeting.createdAt).toLocaleString()} - ${logViewerMeeting.url}`}
                 </DialogDescription>
               </DialogHeader>
             </div>

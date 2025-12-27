@@ -1,0 +1,46 @@
+{
+    "id": "d71fb2dd-1738-40a4-866b-9dcac776e1b9",
+    "name": "High Host CPU Load",
+    "description": "",
+    "tags": [],
+    "published": true,
+    "spec": {
+      "triggers": [
+        {
+          "startStepNames": [
+            "Send_message"
+          ],
+          "monitorTrigger": {}
+        }
+      ],
+      "steps": [
+        {
+          "name": "Send_message",
+          "actionId": "com.datadoghq.slack.send_simple_message",
+          "parameters": [
+            {
+              "name": "teamId",
+              "value": "T0A5R727ZSS"
+            },
+            {
+              "name": "channel",
+              "value": "#devops"
+            },
+            {
+              "name": "text",
+              "value": "High CPU load detected! [{{ Source.monitor.name }}\nSee below:\n{{ Source.monitor.message }}"
+            }
+          ],
+          "display": {
+            "bounds": {
+              "x": 0,
+              "y": 192
+            }
+          }
+        }
+      ],
+      "handle": "host-high-cpu-load",
+      "inputSchema": {},
+      "outputSchema": {}
+    }
+  }

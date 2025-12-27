@@ -32,8 +32,8 @@ export async function GET(
     }
 
     // Always reconstruct from Datadog (User Preference)
-    const transcript = await datadog.getTranscript(id);
-    return NextResponse.json({ transcript });
+    const details = await datadog.getMeetingDetails(id);
+    return NextResponse.json(details);
 
   } catch (error) {
     console.error('Transcript fetch error:', error);

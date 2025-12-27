@@ -30,6 +30,7 @@ from gemini_meet.data_types import (
     ProviderNotSupportedError,
     VideoSnapshot,
 )
+from datadog import statsd  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,21 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                 yield self._page, self._platform_controller
             except Exception as e:
                 msg = f"Failed to perform '{action}'."
+                error_type = type(e).__name__
+
+                # Datadog Metric: Action Failure Count
+                try:
+                    statsd.increment(
+                        "gemini_meet.browser.action_error",
+                        tags=[
+                            f"action:{action}",
+                            f"error_type:{error_type}",
+                            "service:gemini-meet-agent",
+                        ],
+                    )
+                except Exception:
+                    pass
+
                 if "Target crashed" in str(e):
                     logger.warning("%s Browser target crashed.", msg)
                 else:
@@ -353,8 +369,9 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             from pathlib import Path
 
             timestamp = int(time.time())
-            filename = f"snapshot_{timestamp}.jpg"
-            artifact_dir = Path("/workspaces/gemini-meet/artifacts/snapshots")
+            filename = f"snapshot_error_{timestamp}.jpg"
+            # Use /app/data which is mounted to host
+            artifact_dir = Path("/app/data/snapshots")
             artifact_dir.mkdir(parents=True, exist_ok=True)
             filepath = artifact_dir / filename
 

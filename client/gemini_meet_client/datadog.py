@@ -4,6 +4,9 @@ import logging
 import os
 from typing import Any
 
+from datadog import initialize
+from datadog import statsd  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,6 +83,18 @@ def initialize_datadog() -> None:
             "Install with: pip install ddtrace"
         )
         return
+
+    # Initialize Datadog Python client (for custom metrics)
+    try:
+        initialize(
+            api_key=api_key,
+            app_key=os.getenv("DD_APP_KEY"),
+            statsd_host=os.getenv("DD_AGENT_HOST", "localhost"),
+            statsd_port=int(os.getenv("DD_DOGSTATSD_PORT", "8125")),
+        )
+        logger.debug("Datadog Python client initialized")
+    except Exception as e:
+        logger.warning("Failed to initialize Datadog Python client: %s", e)
 
     # Initialize LLM Observability SDK if enabled
     if llmobs_enabled:
@@ -164,3 +179,35 @@ def _patch_libraries(patch: Any) -> None:
         logger.debug("Patched Google Generative AI for Datadog")
     except Exception:
         logger.debug("Google Generative AI patching skipped")
+
+
+def report_llm_metric(
+    metric_type: str,
+    value: float = 1.0,
+    tags: dict[str, str] | None = None,
+) -> None:
+    """Report an LLM-related metric to Datadog.
+
+    Args:
+        metric_type: The type of metric (e.g., "latency", "tokens", "error").
+        value: The value of the metric (default: 1.0).
+        tags: Additional tags for the metric.
+    """
+    if tags is None:
+        tags = {}
+
+    tags["service"] = os.getenv("DD_SERVICE", "gemini-meet-client")
+    tags["env"] = os.getenv("DD_ENV", "production")
+
+    metric_name = f"gemini_meet.llm.{metric_type}"
+    # Convert dict to list of "key:value" strings
+    tag_list = [f"{k}:{v}" for k, v in tags.items()]
+
+    try:
+        if metric_type in ["latency", "tokens"]:
+            statsd.histogram(metric_name, value, tags=tag_list)
+        else:
+            statsd.increment(metric_name, value, tags=tag_list)
+    except Exception:
+        # Fail silently if Datadog is not available or configured
+        pass
