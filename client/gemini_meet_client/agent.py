@@ -435,6 +435,17 @@ class ConversationalToolAgent:
 
         return ModelRequest(parts=parts)
 
+    def _get_last_spoken_text(self) -> str | None:
+        """Get the text from the last speak_text tool call."""
+        for message in reversed(self._messages):
+            if isinstance(message, ModelResponse):
+                for part in message.parts:
+                    if isinstance(part, ToolCallPart) and part.tool_name.endswith(
+                        "speak_text"
+                    ):
+                        return part.args_as_dict().get("text")
+        return None
+
     async def _call_tool(
         self, tool_call: ToolCallPart
     ) -> tuple[ToolReturnPart, UserPromptPart | None]:
@@ -457,6 +468,21 @@ class ConversationalToolAgent:
                 ),
                 None,
             )
+
+        # Deduplication logic for speak_text
+        if tool_call.tool_name.endswith("speak_text"):
+            text = tool_call.args_as_dict().get("text")
+            if text and text == self._get_last_spoken_text():
+                logger.warning("Duplicate speech detected and suppressed: %s", text)
+                # Return success response but don't execute to prevent audio loop
+                return (
+                    ToolReturnPart(
+                        tool_name=tool_call.tool_name,
+                        content="Duplicate speech suppressed.",
+                        tool_call_id=tool_call.tool_call_id,
+                    ),
+                    None,
+                )
 
         logger.info(
             "%s: %s",

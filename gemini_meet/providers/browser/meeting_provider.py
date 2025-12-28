@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import os
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Self
@@ -182,6 +183,7 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
             raise RuntimeError(msg)
 
         async with self._lock:
+            start_time = time.perf_counter()
             try:
                 yield self._page, self._platform_controller
             except Exception as e:
@@ -209,6 +211,19 @@ class BrowserMeetingProvider(BaseMeetingProvider, VideoReader):
                     raise
                 raise RuntimeError(msg) from None
             else:
+                duration = time.perf_counter() - start_time
+                try:
+                    statsd.histogram(
+                        "gemini_meet.browser.action_duration",
+                        duration,
+                        tags=[f"action:{action}", "service:gemini-meet-agent"],
+                    )
+                    statsd.increment(
+                        "gemini_meet.browser.action_success",
+                        tags=[f"action:{action}", "service:gemini-meet-agent"],
+                    )
+                except Exception:
+                    pass
                 logger.info("Successfully performed '%s'.", action)
 
     async def _get_platform_controller(self, url: str) -> BrowserPlatformController:
