@@ -22,9 +22,16 @@ The recommended way to use Gemini Meet is through the **Dashboard**.
 - **Docker** (Must be running)
 - **Node.js 18+** & npm
 - **PostgreSQL** (Or use the docker-compose in `dashboard/` directory)
-
+- **Google Cloud Credentials** (For Gemini)
 ### 1. Build Agent Images
 The dashboard needs these images to spawn agents. You **must** build them first.
+Make sure the `.env` file is present in the root directory.
+```bash
+cp .env.example .env
+```
+Fill in the required variables.
+
+Then build the images:
 
 ```bash
 # 1. Build the base image
@@ -41,8 +48,8 @@ Navigate to the dashboard directory and follow the setup there.
 
 ```bash
 cd dashboard
-cp .env.example .env.local
-# Edit .env.local with your Google Cloud Credentials and Database URL
+cp .env.example .env
+# Edit .env with your Google Cloud Credentials and Database URL
 npm install
 npm run init-db
 npm run dev
@@ -96,12 +103,16 @@ GEMINI_MEET_MODEL_NAME=your-model-name # e.g. gemini-1.5-flash
 ELEVENLABS_API_KEY=your-elevenlabs-key
 ```
 
-### 2. Run with Docker
+### 2. Run with Docker or CLI
 ```bash
 docker run \
   --env-file .env \
   -v "$(pwd)/vertex_credentials.json:/app/vertex_credentials.json" \
   ghcr.io/gemini-meet/gemini-meet:latest --client "https://meet.google.com/abc-defg-hij"
+```
+
+```bash
+uv run gemini_meet/main.py --client "https://meet.google.com/abc-defg-hij"
 ```
 
 ## Features
@@ -120,6 +131,18 @@ We recommend using the DevContainer for a consistent environment.
 1.  Open in VS Code.
 2.  Click "Reopen in Container".
 3.  Run `uv run gemini_meet/main.py` to start the server locally.
+
+## CLI Usage
+
+You can use the CLI to start a single agent from the command line.
+```bash
+uv run gemini_meet/main.py --client "https://meet.google.com/abc-defg-hij"
+```
+
+For a full list of command line options, run:
+```bash
+uv run gemini_meet/main.py --help
+```
 
 ## License
 
