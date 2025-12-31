@@ -6,8 +6,34 @@ import { meetings, mcpConfigs } from '@/db/schema';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import { headers } from 'next/headers';
+
+// Helper to get env var from process.env or fallback to reading from parent .env file
+function getEnvVar(key: string, defaultValue: string = ''): string {
+  if (process.env[key]) {
+    return process.env[key]!;
+  }
+  
+  // Fallback: Try reading from parent .env file
+  try {
+    const projectRoot = path.resolve(process.cwd(), '..');
+    const envFilePath = path.join(projectRoot, '.env');
+    
+    if (fsSync.existsSync(envFilePath)) {
+      const envContent = fsSync.readFileSync(envFilePath, 'utf-8');
+      const match = envContent.match(new RegExp(`^${key}=(.*)$`, 'm'));
+      if (match) {
+        return match[1].trim();
+      }
+    }
+  } catch (e) {
+    console.warn(`Failed to read ${key} from parent .env:`, e);
+  }
+  
+  return defaultValue;
+}
 
 // Removed VertexAI imports and usage - logic moved to Agent.
 
@@ -212,9 +238,9 @@ export async function POST(req: Request) {
         `DD_SERVICE=gemini-meet-agent`, // Explicitly set service to avoid inference crash
         `DASHBOARD_URL=http://host.docker.internal:3000`, // Assuming default Next.js port
         // Pass essential Datadog vars for run-agent.sh startup and early python init
-        `DD_API_KEY=${process.env.DD_API_KEY || ''}`,
-        `DD_SITE=${process.env.DD_SITE || 'datadoghq.com'}`,
-        `DD_ENV=${process.env.DD_ENV || 'production'}`,
+        `DD_API_KEY=${getEnvVar('DD_API_KEY')}`,
+        `DD_SITE=${getEnvVar('DD_SITE', 'datadoghq.com')}`,
+        `DD_ENV=${getEnvVar('DD_ENV', 'production')}`,
         // Enable Datadog logs collection with meeting_id tag
         `DD_LOGS_ENABLED=true`,
         `DD_LOGS_INJECTION=true`,
@@ -223,7 +249,7 @@ export async function POST(req: Request) {
       ],
       HostConfig: {
         Binds: binds,
-        AutoRemove: false // Keep containers for debugging
+        AutoRemove: true
       }
     };
 

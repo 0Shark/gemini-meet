@@ -51,6 +51,7 @@ class DatadogHttpHandler(logging.Handler):
                 "hostname": self.hostname,
                 "ddsource": "python",
                 "timestamp": int(record.created * 1000),  # ms
+                "logger.name": record.name,  # Include logger name for filtering
             }
 
             # Add trace info if available (injected by DDLogHandler or others)

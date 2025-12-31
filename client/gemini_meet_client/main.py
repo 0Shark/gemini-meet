@@ -278,12 +278,13 @@ def cli(  # noqa: PLR0913
         log_level = logging.DEBUG
 
     logging.basicConfig(
-        level=logging.WARNING if not quiet else logging.ERROR,
+        level=log_level,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
     logging.getLogger("gemini_meet_client").setLevel(log_level)
+    logging.getLogger("gemini_meet").setLevel(log_level)
 
     if prompt_file and not prompt:
         try:

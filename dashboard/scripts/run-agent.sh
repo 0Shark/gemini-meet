@@ -50,4 +50,3 @@ trap cleanup EXIT
 
 # Run the command passed as arguments
 "$@"
-
