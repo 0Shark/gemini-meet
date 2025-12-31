@@ -86,3 +86,13 @@ APM tracing is supported for detailed performance analysis of:
 *   **LLM Calls**: View exact prompts and completions in the Trace view.
 *   **Tool Execution**: See how long each tool (e.g., `brave_search`, `speak_text`) took to run.
 *   **Startup Sequence**: Analyze container startup and browser initialization times.
+
+## 5. Screenshots
+
+Here are examples of Datadog dashboards and monitors in action:
+
+![Datadog Dashboard 1](docs/datadog_1.png)
+
+![Datadog Dashboard 2](docs/datadog_2.png)
+
+![Datadog Dashboard 3](docs/datadog_3.png)
