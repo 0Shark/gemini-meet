@@ -4,13 +4,15 @@
 
 Unlike simple transcription bots, Gemini Meet agents are **active participants**: they can speak, use tools (via MCP), and reason in real-time using **Google's Gemini** models (or other providers).
 
+[Gemini Meet](https://meetings.juledz.com)
+
 ## 🚀 The Platform
 
 The platform consists of two parts:
 1.  **The Dashboard**: A web interface to manage agents, configure tools (MCP), and view live meeting details.
 2.  **The Agents**: Ephemeral Docker containers spawned by the dashboard that actually join the meetings.
 
-![Dashboard Preview](https://raw.githubusercontent.com/joinly-ai/joinly/main/docs/dashboard-preview.png)
+![Dashboard Preview](https://raw.githubusercontent.com/0Shark/gemini-meet/main/docs/dashboard-preview.png)
 
 ## ⚡️ Quickstart
 
