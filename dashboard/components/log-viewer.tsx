@@ -28,22 +28,64 @@ export function LogViewer({ logs }: LogViewerProps) {
     if (!logs) return [];
     
     return logs.split('\n').filter(Boolean).map((line, index) => {
-      // Regex to parse: TIMESTAMP [LEVEL] [INTERNAL_TIMESTAMP] LEVEL LOGGER: MESSAGE
-      // Example: 2025-12-19T00:05:12.695Z [info] [2025-12-19 00:05:12] INFO     gemini_meet_client.datadog: message
-      const match = line.match(/^(\S+) \[(.*?)\] \[(.*?)\] (\w+)\s+(.*?): (.*)$/);
+      // Format from Datadog: TIMESTAMP [STATUS] [LOGGER ]MESSAGE
+      // Example: 2025-12-19T00:05:12.695Z [INFO] gemini_meet.controllers.speech.default Spoken (1/2): "Hello"
+      // Or with colon in message: 2025-12-19T00:05:12.695Z [INFO] gemini_meet_client.agent speak_text: text="Hello"
       
-      if (match) {
+      // Try parsing with logger name (has a colon or space before message content)
+      const matchWithLogger = line.match(/^(\S+)\s+\[(\w+)\]\s+(\S+)\s+(.*)$/);
+      
+      if (matchWithLogger) {
+        const timestamp = matchWithLogger[1];
+        const level = matchWithLogger[2];
+        const logger = matchWithLogger[3];
+        const message = matchWithLogger[4];
+        
+        // Format timestamp for display
+        let displayTime = timestamp;
+        try {
+          const date = new Date(timestamp);
+          displayTime = date.toISOString().replace('T', ' ').replace('Z', '');
+        } catch {
+          // Keep original if parsing fails
+        }
+        
         return {
           id: index,
           raw: line,
-          timestamp: match[3], // Use internal timestamp as it's cleaner
-          level: match[4],
-          logger: match[5],
-          message: match[6]
+          timestamp: displayTime,
+          level: level.toUpperCase(),
+          logger,
+          message
         };
       }
       
-      // Fallback for lines that don't match (e.g. stack traces)
+      // Simpler format: TIMESTAMP [STATUS] MESSAGE (no logger)
+      const matchSimple = line.match(/^(\S+)\s+\[(\w+)\]\s+(.*)$/);
+      
+      if (matchSimple) {
+        const timestamp = matchSimple[1];
+        const level = matchSimple[2];
+        const message = matchSimple[3];
+        
+        let displayTime = timestamp;
+        try {
+          const date = new Date(timestamp);
+          displayTime = date.toISOString().replace('T', ' ').replace('Z', '');
+        } catch {
+          // Keep original if parsing fails
+        }
+        
+        return {
+          id: index,
+          raw: line,
+          timestamp: displayTime,
+          level: level.toUpperCase(),
+          message
+        };
+      }
+      
+      // Fallback for lines that don't match (e.g. stack traces, plain text)
       return {
         id: index,
         raw: line,
