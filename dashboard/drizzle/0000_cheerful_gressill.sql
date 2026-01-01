@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS "account" (
 	"userId" text,
 	"accessToken" text,
 	"refreshToken" text,
+	"idToken" text,
 	"accessTokenExpiresAt" timestamp,
 	"refreshTokenExpiresAt" timestamp,
 	"scope" text,
@@ -99,3 +100,4 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_mcp_configs_user_id" ON "mcp_configs" USING btree ("user_id");
+

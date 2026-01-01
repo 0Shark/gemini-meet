@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  const sessionToken = request.cookies.get("better-auth.session_token");
+  // In production with HTTPS, Better Auth uses __Secure- prefix
+  const sessionToken = request.cookies.get("better-auth.session_token") || 
+                       request.cookies.get("__Secure-better-auth.session_token");
   
   // List of public paths that don't require authentication
   const publicPaths = ["/auth/login", "/auth/signup", "/api/auth"];
